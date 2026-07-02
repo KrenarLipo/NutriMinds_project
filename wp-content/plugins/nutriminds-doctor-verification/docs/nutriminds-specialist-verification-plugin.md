@@ -69,9 +69,11 @@ This file powers the frontend interaction:
 - Step navigation
 - Profession filtering
 - Profession selection
+- Category filter chips and collapsible profession groups to keep the long specialist list manageable
 - Selected profession summary
 - Review summary
 - Inline validation before moving between steps or submitting
+- Top-level validation summary when a step has errors
 - AJAX submission into the local WordPress admin queue
 
 JavaScript text and profession data are passed from PHP using:
@@ -80,19 +82,44 @@ JavaScript text and profession data are passed from PHP using:
 
 The template also prints a `data-nm-registration-config` JSON block so the frontend can reliably read the larger profession lists.
 
-Validation currently checks required text fields, email format, phone format, required profession selection, required consent checkboxes, required document uploads, file type, and a maximum file size of 10 MB. The backend repeats the phone, required-field, file-size, and allowed-file-type checks before storing the application.
+Validation currently checks required text fields, email format, phone format, professional registration/license reference format, required profession selection, required consent checkboxes, required document uploads, file type, and a maximum file size of 10 MB. The backend repeats the phone, license-reference, required-field, file-size, and allowed-file-type checks before storing the application.
 
 ### assets/css/registration.css
 
 This file contains the visual style for the specialist verification form and language switcher. The style was adjusted toward the NutriMinds design direction:
 
 - clean health/wellness layout
-- soft green and neutral palette
+- NutriMinds blue, coral, sand, and neutral palette
+- bundled NutriMinds logo in the form header, with WordPress custom logo preferred when available
+- form shell widened to 1080px for the profession-selection step
+- header logo constrained to `max-height: 20px` with automatic width
 - rounded form controls
 - step-based flow
 - specialist-oriented wording
 - menu flag styling
 - Dosis font loaded through WordPress and applied globally across the public website with `font-family: 'Dosis', Sans-serif;`
+
+## Professional License Validation
+
+The German professional-license field is intentionally flexible because the professions in the list do not share a single universal identifier.
+
+Examples accepted by the form:
+
+- Approbation document/reference
+- Berufserlaubnis document/reference
+- LANR, normally 9 digits for physicians
+- EFN, normally 15 digits for continuing medical education contexts
+- Kammermitgliedsnummer / chamber membership number
+- Heilpraktiker-Erlaubnis or official file/reference number
+
+Frontend and backend validation require 4-60 characters, at least four letters/numbers, and only letters, numbers, spaces, dots, colons, slashes, hyphens, underscores, or `#`.
+
+Research notes:
+
+- German physicians need Approbation or a temporary permit to practise medicine under the Berufsordnung/Bundesärzteordnung framework.
+- Psychotherapists need Approbation or a temporary permit to use the protected professional title.
+- Heilpraktiker need an official permit to practise medicine without being licensed as a physician.
+- LANR is physician-specific and not a universal identifier for all NutriMinds professions.
 
 ### languages/en.json and languages/de.json
 

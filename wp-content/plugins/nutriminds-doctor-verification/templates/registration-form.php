@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
     <div class="nm-registration__shell">
         <header class="nm-registration__header">
             <div>
-                <p class="nm-registration__brand"><?php echo esc_html($this->t('form.brand')); ?><sup>&reg;</sup></p>
+                <img class="nm-registration__logo" src="<?php echo esc_url($this->get_registration_logo_url()); ?>" alt="<?php echo esc_attr($this->t('form.brand')); ?>">
                 <h1><?php echo esc_html($this->t('form.title')); ?></h1>
                 <p><?php echo esc_html($this->t('form.intro')); ?></p>
             </div>
@@ -29,6 +29,8 @@ if (!defined('ABSPATH')) {
         </ol>
 
         <form class="nm-registration__form" novalidate>
+            <div class="nm-validation-summary" data-nm-validation-summary hidden tabindex="-1" role="alert" aria-live="assertive"></div>
+
             <div class="nm-registration__panel is-active" data-nm-step="1">
                 <div class="nm-registration__copy">
                     <h2><?php echo esc_html($this->t('details.title')); ?></h2>
@@ -58,7 +60,8 @@ if (!defined('ABSPATH')) {
                     </label>
                     <label>
                         <span><?php echo esc_html($this->t('details.registrationNumber')); ?></span>
-                        <input type="text" name="license_number" required>
+                        <input type="text" name="license_number" placeholder="<?php echo esc_attr($this->t('details.registrationNumberPlaceholder')); ?>" required>
+                        <small class="nm-field-hint"><?php echo esc_html($this->t('details.registrationNumberHelp')); ?></small>
                     </label>
                 </div>
             </div>
@@ -74,6 +77,7 @@ if (!defined('ABSPATH')) {
                     <input type="search" name="specialty_search" data-nm-specialty-search placeholder="<?php echo esc_attr($this->t('specialties.searchPlaceholder')); ?>">
                 </label>
 
+                <div class="nm-specialty-toolbar" data-nm-specialty-filters></div>
                 <div class="nm-specialties" data-nm-specialties></div>
                 <div class="nm-selected" data-nm-selected-specialties></div>
             </div>

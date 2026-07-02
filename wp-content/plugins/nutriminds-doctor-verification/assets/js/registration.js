@@ -45,12 +45,16 @@
         const nextButton = root.querySelector('[data-nm-next]');
         const submitButton = root.querySelector('[data-nm-submit]');
         const specialtyList = root.querySelector('[data-nm-specialties]');
+        const specialtyFilters = root.querySelector('[data-nm-specialty-filters]');
         const selectedList = root.querySelector('[data-nm-selected-specialties]');
         const specialtySearch = root.querySelector('[data-nm-specialty-search]');
         const review = root.querySelector('[data-nm-review]');
         const notice = root.querySelector('[data-nm-submit-notice]');
+        const validationSummary = root.querySelector('[data-nm-validation-summary]');
         const selected = new Map();
+        const categories = Array.from(new Set(specialties.map((specialty) => specialty.category || '').filter(Boolean)));
         let primarySpecialty = '';
+        let activeCategory = 'all';
         let step = 1;
 
         function getValue(name) {
@@ -92,6 +96,37 @@
             }
             field.removeAttribute('aria-invalid');
             field.removeAttribute('aria-describedby');
+        }
+
+        function fieldLabel(field) {
+            const labelNode = field.closest('label');
+            const labelText = labelNode ? labelNode.querySelector('span') : null;
+
+            return labelText ? labelText.textContent.trim() : field.name;
+        }
+
+        function clearValidationSummary() {
+            if (!validationSummary) {
+                return;
+            }
+
+            validationSummary.hidden = true;
+            validationSummary.innerHTML = '';
+        }
+
+        function showValidationSummary(items) {
+            if (!validationSummary || items.length === 0) {
+                return;
+            }
+
+            const list = items.map((item) => `<li>${escapeHtml(item.label)}: ${escapeHtml(item.message)}</li>`).join('');
+            validationSummary.innerHTML = `
+                <p class="nm-validation-summary__title">${escapeHtml(label('validation.summaryTitle', 'Please check the highlighted fields'))}</p>
+                <p>${escapeHtml(label('validation.summaryIntro', 'We found a few details that need attention before you can continue.'))}</p>
+                <ul>${list}</ul>
+            `;
+            validationSummary.hidden = false;
+            validationSummary.focus({ preventScroll: true });
         }
 
         function setFieldError(field, message) {
@@ -139,6 +174,16 @@
             return /^\+?[\d\s().-]{7,24}$/.test(value) && digits.length >= 7 && digits.length <= 20;
         }
 
+        function isValidLicenseNumber(value) {
+            const normalized = value.trim().replace(/\s+/g, ' ');
+            const alphanumeric = normalized.match(/[A-Za-z0-9ÄÖÜäöüß]/g) || [];
+
+            return normalized.length >= 4 &&
+                normalized.length <= 60 &&
+                alphanumeric.length >= 4 &&
+                /^[A-Za-zÄÖÜäöüß0-9][A-Za-zÄÖÜäöüß0-9 .:/#_-]*$/u.test(normalized);
+        }
+
         function validationMessage(field) {
             const value = field.value.trim();
 
@@ -172,6 +217,10 @@
                 return label('validation.phone', 'Please enter a valid phone number.');
             }
 
+            if (field.name === 'license_number' && value && !isValidLicenseNumber(value)) {
+                return label('validation.licenseNumber', 'Please enter a valid professional license, registration, chamber, LANR or permit reference.');
+            }
+
             return '';
         }
 
@@ -190,33 +239,84 @@
             const activePanel = panels[step - 1];
             const fields = Array.from(activePanel.querySelectorAll('input[required]'));
             let firstInvalid = null;
+            const errors = [];
 
             fields.forEach((field) => {
-                if (!validateField(field) && !firstInvalid) {
-                    firstInvalid = field;
+                const message = validationMessage(field);
+                if (message) {
+                    setFieldError(field, message);
+                    errors.push({
+                        label: fieldLabel(field),
+                        message,
+                    });
+                    if (!firstInvalid) {
+                        firstInvalid = field;
+                    }
+                } else {
+                    clearFieldError(field);
                 }
             });
 
             if (step === 2) {
                 clearSpecialtyError();
                 if (selected.size === 0 || !primarySpecialty) {
-                    setSpecialtyError(label('validation.specialtiesRequired', 'Please select at least one profession and choose a primary profession.'));
+                    const message = label('validation.specialtiesRequired', 'Please select at least one profession and choose a primary profession.');
+                    setSpecialtyError(message);
+                    errors.push({
+                        label: label('step.specialties', 'Professions'),
+                        message,
+                    });
+                    showValidationSummary(errors);
                     specialtyList.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     return false;
                 }
             }
 
             if (firstInvalid) {
+                showValidationSummary(errors);
                 firstInvalid.focus({ preventScroll: true });
                 firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return false;
             }
 
+            clearValidationSummary();
             return true;
+        }
+
+        function renderCategoryFilters() {
+            if (!specialtyFilters) {
+                return;
+            }
+
+            if (!categories.includes(activeCategory)) {
+                activeCategory = 'all';
+            }
+
+            const categoryItems = [
+                {
+                    id: 'all',
+                    label: label('js.allCategories', 'All'),
+                    count: specialties.length,
+                },
+                ...categories.map((category) => ({
+                    id: category,
+                    label: category,
+                    count: specialties.filter((specialty) => specialty.category === category).length,
+                })),
+            ];
+
+            specialtyFilters.innerHTML = categoryItems.map((category) => `
+                <button type="button" class="nm-filter-chip ${activeCategory === category.id ? 'is-active' : ''}" data-nm-filter-category="${escapeHtml(category.id)}">
+                    ${escapeHtml(category.label)}
+                    <span>${category.count}</span>
+                </button>
+            `).join('');
         }
 
         function renderSpecialties() {
             const query = specialtySearch.value.trim().toLowerCase();
+            renderCategoryFilters();
+
             const filtered = specialties.filter((specialty) => {
                 return !query ||
                     specialty.name.toLowerCase().includes(query) ||
@@ -224,7 +324,7 @@
                     (specialty.description || '').toLowerCase().includes(query) ||
                     (specialty.groupDescription || '').toLowerCase().includes(query) ||
                     (specialty.tags || []).some((tag) => tag.toLowerCase().includes(query));
-            });
+            }).filter((specialty) => activeCategory === 'all' || specialty.category === activeCategory);
 
             if (!filtered.length) {
                 specialtyList.innerHTML = `<p class="nm-empty">${escapeHtml(label('js.noResults', 'No professions match your search.'))}</p>`;
@@ -245,6 +345,8 @@
             }, new Map());
 
             specialtyList.innerHTML = Array.from(grouped.entries()).map(([category, group]) => {
+                const selectedInGroup = group.items.some((specialty) => selected.has(specialty.id));
+                const groupShouldOpen = Boolean(query) || activeCategory !== 'all' || selectedInGroup;
                 const description = group.description
                     ? `<p class="nm-specialty-group__description">${escapeHtml(group.description)}</p>`
                     : '';
@@ -276,13 +378,14 @@
                 }).join('');
 
                 return `
-                    <section class="nm-specialty-group">
-                        <header class="nm-specialty-group__header">
+                    <details class="nm-specialty-group" ${groupShouldOpen ? 'open' : ''}>
+                        <summary class="nm-specialty-group__header">
                             <h3>${escapeHtml(category)}</h3>
+                            <span class="nm-specialty-group__count">${group.items.length} ${escapeHtml(group.items.length === 1 ? label('js.professionCount', 'profession') : label('js.professionCountPlural', 'professions'))}</span>
                             ${description}
-                        </header>
+                        </summary>
                         <div class="nm-specialty-group__items">${items}</div>
-                    </section>
+                    </details>
                 `;
             }).join('');
 
@@ -378,6 +481,7 @@
         form.addEventListener('input', (event) => {
             if (event.target instanceof HTMLInputElement && event.target.type !== 'file') {
                 clearFieldError(event.target);
+                clearValidationSummary();
             }
         });
         form.addEventListener('change', (event) => {
@@ -390,7 +494,22 @@
                 validateField(event.target);
             }
         }, true);
-        specialtySearch.addEventListener('input', renderSpecialties);
+        specialtySearch.addEventListener('input', () => {
+            clearValidationSummary();
+            renderSpecialties();
+        });
+        if (specialtyFilters) {
+            specialtyFilters.addEventListener('click', (event) => {
+                const filter = event.target.closest('[data-nm-filter-category]');
+                if (!filter) {
+                    return;
+                }
+
+                activeCategory = filter.dataset.nmFilterCategory || 'all';
+                clearValidationSummary();
+                renderSpecialties();
+            });
+        }
         backButton.addEventListener('click', () => showStep(step - 1));
         nextButton.addEventListener('click', () => {
             if (validateStep()) {

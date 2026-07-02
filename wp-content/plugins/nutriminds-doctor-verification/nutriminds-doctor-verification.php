@@ -165,6 +165,10 @@ final class NutriMinds_Doctor_Verification {
             wp_send_json_error(['message' => $this->t('ajax.phoneError')], 400);
         }
 
+        if (!$this->is_valid_license_number($license_number)) {
+            wp_send_json_error(['message' => $this->t('ajax.licenseError')], 400);
+        }
+
         $post_id = wp_insert_post([
             'post_type' => self::POST_TYPE,
             'post_status' => 'publish',
@@ -696,6 +700,9 @@ final class NutriMinds_Doctor_Verification {
                 'js.select',
                 'js.primary',
                 'js.primaryPrefix',
+                'js.allCategories',
+                'js.professionCount',
+                'js.professionCountPlural',
                 'js.selectedTitle',
                 'js.reviewTitle',
                 'js.registrationLabel',
@@ -709,11 +716,14 @@ final class NutriMinds_Doctor_Verification {
                 'validation.required',
                 'validation.email',
                 'validation.phone',
+                'validation.licenseNumber',
                 'validation.fileRequired',
                 'validation.fileSize',
                 'validation.fileType',
                 'validation.specialtiesRequired',
                 'validation.termsRequired',
+                'validation.summaryTitle',
+                'validation.summaryIntro',
             ]),
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'action' => self::AJAX_ACTION,
@@ -811,6 +821,18 @@ final class NutriMinds_Doctor_Verification {
         $this->translations[$language] = is_array($decoded) ? $decoded : [];
 
         return $this->translations[$language];
+    }
+
+    public function get_registration_logo_url(): string {
+        $custom_logo_id = (int) get_theme_mod('custom_logo');
+        if ($custom_logo_id) {
+            $custom_logo_url = wp_get_attachment_image_url($custom_logo_id, 'full');
+            if ($custom_logo_url) {
+                return $custom_logo_url;
+            }
+        }
+
+        return plugin_dir_url(__FILE__) . 'assets/images/nutriminds-logo.svg';
     }
 
     private function t_for_language(string $key, string $language): string {
@@ -1403,6 +1425,17 @@ final class NutriMinds_Doctor_Verification {
         $digits = preg_replace('/\D/', '', $normalized) ?? '';
 
         return (bool) preg_match('/^\+?[\d\s().-]{7,24}$/', $phone) && strlen($digits) >= 7 && strlen($digits) <= 20;
+    }
+
+    private function is_valid_license_number(string $license_number): bool {
+        $normalized = trim(preg_replace('/\s+/', ' ', $license_number) ?? '');
+        $alphanumeric_count = preg_match_all('/[A-Za-z0-9]/', $normalized);
+
+        if ($normalized === '' || strlen($normalized) < 4 || strlen($normalized) > 60 || $alphanumeric_count < 4) {
+            return false;
+        }
+
+        return (bool) preg_match('/^[A-Za-zÄÖÜäöüß0-9][A-Za-zÄÖÜäöüß0-9 .:\/#_-]*$/u', $normalized);
     }
 }
 

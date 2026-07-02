@@ -18,7 +18,11 @@ textarea {
     --nm-sand-soft: #fbefe4;
     color: var(--nm-ink);
     font-family: 'Dosis', Sans-serif;
-    background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+    background:
+        linear-gradient(115deg, rgba(62, 116, 183, 0.12), transparent 34%),
+        linear-gradient(245deg, rgba(220, 60, 34, 0.1), transparent 28%),
+        radial-gradient(circle at 18% 18%, rgba(234, 200, 166, 0.42), transparent 24%),
+        linear-gradient(180deg, #ffffff 0%, #f7fbfd 54%, #fff7ef 100%);
     padding: 34px 16px;
 }
 
@@ -59,31 +63,33 @@ textarea {
 }
 
 .nm-registration__shell {
-    background: #fffdfb;
+    background: rgba(255, 253, 251, 0.96);
     border: 1px solid rgba(62, 116, 183, 0.18);
-    border-radius: 28px;
-    box-shadow: 0 24px 65px rgba(17, 32, 51, 0.1);
+    border-radius: 24px;
+    box-shadow: 0 26px 80px rgba(17, 32, 51, 0.14);
     margin: 0 auto;
-    max-width: 920px;
+    max-width: 1080px;
     overflow: hidden;
 }
 
 .nm-registration__header {
     align-items: flex-start;
     background:
-        radial-gradient(circle at 88% 16%, rgba(234, 200, 166, 0.35), transparent 28%),
-        linear-gradient(135deg, #f7fbff 0%, #fffaf5 100%);
+        linear-gradient(135deg, rgba(62, 116, 183, 0.14), rgba(255, 255, 255, 0.82) 52%, rgba(234, 200, 166, 0.22)),
+        linear-gradient(180deg, #ffffff 0%, #fffaf5 100%);
     display: flex;
     gap: 24px;
     justify-content: space-between;
     padding: 38px 42px 28px;
 }
 
-.nm-registration__brand {
-    color: var(--nm-blue);
-    font-size: 21px;
-    font-weight: 700;
-    margin: 0 0 12px;
+.nm-registration__logo {
+    display: block;
+    height: auto;
+    margin: 0 0 14px;
+    max-height: 60px;
+    max-width: 100%;
+    width: auto;
 }
 
 .nm-registration__header h1,
@@ -215,6 +221,43 @@ textarea {
     width: 100%;
 }
 
+.nm-field-hint {
+    color: var(--nm-muted);
+    display: block;
+    font-size: 13px;
+    line-height: 1.35;
+    margin-top: 7px;
+}
+
+.nm-validation-summary {
+    background: #fff0ed;
+    border: 1px solid rgba(220, 60, 34, 0.34);
+    border-radius: 18px;
+    color: var(--nm-coral);
+    margin: 0 0 22px;
+    padding: 16px 18px;
+}
+
+.nm-validation-summary:focus {
+    box-shadow: 0 0 0 3px rgba(220, 60, 34, 0.14);
+    outline: none;
+}
+
+.nm-validation-summary__title {
+    color: var(--nm-coral);
+    font-weight: 700;
+    margin: 0 0 4px;
+}
+
+.nm-validation-summary p {
+    margin: 0 0 8px;
+}
+
+.nm-validation-summary ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
 .nm-registration input:focus {
     border-color: var(--nm-blue);
     box-shadow: 0 0 0 3px rgba(62, 116, 183, 0.15);
@@ -244,21 +287,72 @@ textarea {
 
 .nm-specialties {
     display: grid;
-    gap: 18px;
+    gap: 12px;
     margin: 18px 0;
+}
+
+.nm-specialty-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: -4px 0 16px;
+}
+
+.nm-filter-chip {
+    align-items: center;
+    background: #fff;
+    border: 1px solid rgba(62, 116, 183, 0.2);
+    border-radius: 999px;
+    color: var(--nm-blue);
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-weight: 700;
+    gap: 8px;
+    min-height: 36px;
+    padding: 7px 12px;
+}
+
+.nm-filter-chip span {
+    background: var(--nm-blue-soft);
+    border-radius: 999px;
+    color: var(--nm-muted);
+    font-size: 12px;
+    min-width: 24px;
+    padding: 2px 7px;
+}
+
+.nm-filter-chip.is-active {
+    background: var(--nm-blue);
+    border-color: var(--nm-blue);
+    color: #fff;
+}
+
+.nm-filter-chip.is-active span {
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
 }
 
 .nm-specialty-group {
     background: #fffaf5;
     border: 1px solid rgba(62, 116, 183, 0.14);
-    border-radius: 20px;
+    border-radius: 16px;
     overflow: hidden;
 }
 
 .nm-specialty-group__header {
+    align-items: center;
     background: linear-gradient(135deg, rgba(62, 116, 183, 0.08), rgba(234, 200, 166, 0.16));
     border-bottom: 1px solid rgba(62, 116, 183, 0.12);
+    cursor: pointer;
+    display: grid;
+    gap: 6px 12px;
+    grid-template-columns: 1fr auto;
     padding: 16px 18px;
+}
+
+.nm-specialty-group__header::marker {
+    color: var(--nm-blue);
 }
 
 .nm-specialty-group__header h3 {
@@ -268,9 +362,21 @@ textarea {
     margin: 0;
 }
 
+.nm-specialty-group__count {
+    background: #fff;
+    border: 1px solid rgba(62, 116, 183, 0.14);
+    border-radius: 999px;
+    color: var(--nm-blue);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 5px 9px;
+    white-space: nowrap;
+}
+
 .nm-specialty-group__description {
     color: var(--nm-muted);
     font-size: 14px;
+    grid-column: 1 / -1;
     margin: 5px 0 0;
 }
 
