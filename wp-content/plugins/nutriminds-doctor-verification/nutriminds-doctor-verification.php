@@ -26,6 +26,7 @@ final class NutriMinds_Doctor_Verification {
     //private const PLATFORM_DEFAULT_ENDPOINT = 'https://os.nutriminds.net.stage.ocelot-social.it4c.org/api';
     private const PLATFORM_DEFAULT_ENDPOINT = 'https://os.nutriminds.net/api';
     private const REST_NAMESPACE = 'nutriminds/v1';
+    private const MANAGE_CAPABILITY = 'nutriminds_manage_applications';
 
     private array $translations = [];
     private ?string $current_language = null;
@@ -48,6 +49,21 @@ final class NutriMinds_Doctor_Verification {
         add_action('add_meta_boxes', [$this, 'register_application_meta_boxes']);
         add_filter('manage_' . self::POST_TYPE . '_posts_columns', [$this, 'filter_application_columns']);
         add_action('manage_' . self::POST_TYPE . '_posts_custom_column', [$this, 'render_application_column'], 10, 2);
+        add_action('admin_init', [$this, 'ensure_manage_capability_granted']);
+    }
+
+    public static function activate(): void {
+        $role = get_role('administrator');
+        if ($role && !$role->has_cap(self::MANAGE_CAPABILITY)) {
+            $role->add_cap(self::MANAGE_CAPABILITY);
+        }
+    }
+
+    public function ensure_manage_capability_granted(): void {
+        $role = get_role('administrator');
+        if ($role && !$role->has_cap(self::MANAGE_CAPABILITY)) {
+            $role->add_cap(self::MANAGE_CAPABILITY);
+        }
     }
 
     public function capture_language_choice(): void {
@@ -130,6 +146,14 @@ final class NutriMinds_Doctor_Verification {
             'show_in_admin_bar' => false,
             'supports' => ['title'],
             'capability_type' => 'post',
+            'capabilities' => [
+                'edit_posts' => self::MANAGE_CAPABILITY,
+                'edit_others_posts' => self::MANAGE_CAPABILITY,
+                'publish_posts' => self::MANAGE_CAPABILITY,
+                'read_private_posts' => self::MANAGE_CAPABILITY,
+                'delete_posts' => self::MANAGE_CAPABILITY,
+                'delete_others_posts' => self::MANAGE_CAPABILITY,
+            ],
             'map_meta_cap' => true,
             'menu_icon' => 'dashicons-clipboard',
         ]);
@@ -209,7 +233,7 @@ final class NutriMinds_Doctor_Verification {
         add_menu_page(
             'NutriMinds Verification',
             'NutriMinds',
-            'edit_posts',
+            'manage_options',
             'nutriminds-verification',
             [$this, 'render_admin_applications_page'],
             'dashicons-clipboard',
@@ -220,7 +244,7 @@ final class NutriMinds_Doctor_Verification {
             'nutriminds-verification',
             'Applications',
             'Applications',
-            'edit_posts',
+            'manage_options',
             'nutriminds-verification',
             [$this, 'render_admin_applications_page']
         );
@@ -229,7 +253,7 @@ final class NutriMinds_Doctor_Verification {
             'nutriminds-verification',
             'Application Records',
             'Application Records',
-            'edit_posts',
+            'manage_options',
             'edit.php?post_type=' . self::POST_TYPE
         );
 
@@ -244,7 +268,7 @@ final class NutriMinds_Doctor_Verification {
     }
 
     public function render_admin_applications_page(): void {
-        if (!current_user_can('edit_posts')) {
+        if (!current_user_can('manage_options')) {
             wp_die(esc_html__('Sorry, you are not allowed to access this page.', 'nutriminds-doctor-verification'));
         }
 
@@ -295,7 +319,7 @@ final class NutriMinds_Doctor_Verification {
         $post_id = isset($_POST['application_id']) ? absint($_POST['application_id']) : 0;
         $decision = isset($_POST['decision']) ? sanitize_key((string) wp_unslash($_POST['decision'])) : '';
 
-        if (!$post_id || !current_user_can('edit_post', $post_id) || !in_array($decision, ['approved', 'rejected'], true)) {
+        if (!$post_id || !current_user_can('manage_options') || !in_array($decision, ['approved', 'rejected'], true)) {
             wp_die(esc_html__('Invalid application decision.', 'nutriminds-doctor-verification'));
         }
 
@@ -370,7 +394,7 @@ final class NutriMinds_Doctor_Verification {
     public function handle_platform_retry(): void {
         $post_id = isset($_POST['application_id']) ? absint($_POST['application_id']) : 0;
 
-        if (!$post_id || !current_user_can('edit_post', $post_id)) {
+        if (!$post_id || !current_user_can('manage_options')) {
             wp_die(esc_html__('Invalid platform retry request.', 'nutriminds-doctor-verification'));
         }
 
@@ -1415,4 +1439,5 @@ final class NutriMinds_Doctor_Verification {
 
 }
 
+register_activation_hook(__FILE__, [NutriMinds_Doctor_Verification::class, 'activate']);
 new NutriMinds_Doctor_Verification();
