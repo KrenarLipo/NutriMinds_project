@@ -59,9 +59,9 @@ if (!defined('ABSPATH')) {
                         <input type="tel" name="phone" autocomplete="tel" required>
                     </label>
                     <label>
-                        <span><?php echo esc_html($this->t('details.registrationNumber')); ?></span>
-                        <input type="text" name="license_number" placeholder="<?php echo esc_attr($this->t('details.registrationNumberPlaceholder')); ?>" required>
-                        <small class="nm-field-hint"><?php echo esc_html($this->t('details.registrationNumberHelp')); ?></small>
+                        <span><?php echo esc_html($this->t('details.address')); ?></span>
+                        <input type="text" name="address" autocomplete="street-address" placeholder="<?php echo esc_attr($this->t('details.addressPlaceholder')); ?>">
+                        <small class="nm-field-hint"><?php echo esc_html($this->t('details.addressHelp')); ?></small>
                     </label>
                 </div>
             </div>
@@ -97,6 +97,12 @@ if (!defined('ABSPATH')) {
                 <label class="nm-file">
                     <span><?php echo esc_html($this->t('documents.credential')); ?></span>
                     <input type="file" name="diploma_file" accept=".pdf,.jpg,.jpeg,.png" required>
+                    <small><?php echo esc_html($this->t('documents.help')); ?></small>
+                </label>
+
+                <label class="nm-file">
+                    <span><?php echo esc_html($this->t('documents.identity')); ?></span>
+                    <input type="file" name="id_file" accept=".pdf,.jpg,.jpeg,.png" required>
                     <small><?php echo esc_html($this->t('documents.help')); ?></small>
                 </label>
             </div>

@@ -174,16 +174,6 @@
             return /^\+?[\d\s().-]{7,24}$/.test(value) && digits.length >= 7 && digits.length <= 20;
         }
 
-        function isValidLicenseNumber(value) {
-            const normalized = value.trim().replace(/\s+/g, ' ');
-            const alphanumeric = normalized.match(/[A-Za-z0-9ÄÖÜäöüß]/g) || [];
-
-            return normalized.length >= 4 &&
-                normalized.length <= 60 &&
-                alphanumeric.length >= 4 &&
-                /^[A-Za-zÄÖÜäöüß0-9][A-Za-zÄÖÜäöüß0-9 .:/#_-]*$/u.test(normalized);
-        }
-
         function validationMessage(field) {
             const value = field.value.trim();
 
@@ -215,10 +205,6 @@
 
             if (field.type === 'tel' && value && !isValidPhone(value)) {
                 return label('validation.phone', 'Please enter a valid phone number.');
-            }
-
-            if (field.name === 'license_number' && value && !isValidLicenseNumber(value)) {
-                return label('validation.licenseNumber', 'Please enter a valid professional license, registration, chamber, LANR or permit reference.');
             }
 
             return '';
@@ -413,6 +399,12 @@
         function renderReview() {
             const licenseFile = form.elements.license_file.files[0];
             const diplomaFile = form.elements.diploma_file.files[0];
+            const identityFile = form.elements.id_file.files[0];
+            const address = getValue('address');
+            const contactParts = [getValue('phone')];
+            if (address) {
+                contactParts.push(`${label('js.addressLabel', 'Address')}: ${address}`);
+            }
             const selectedItems = Array.from(selected.values()).map((specialty) => {
                 const isPrimary = primarySpecialty === specialty.id;
                 const prefix = isPrimary ? `${label('js.primaryPrefix', 'Primary')} · ` : '';
@@ -422,9 +414,9 @@
             review.innerHTML = `
                 <p class="nm-review__title">${escapeHtml(label('js.reviewTitle', 'Application summary'))}</p>
                 <p><strong>${escapeHtml(getValue('first_name'))} ${escapeHtml(getValue('last_name'))}</strong> · ${escapeHtml(getValue('email'))}</p>
-                <p>${escapeHtml(getValue('phone'))} · ${escapeHtml(label('js.registrationLabel', 'Registration'))} ${escapeHtml(getValue('license_number'))}</p>
+                <p>${escapeHtml(contactParts.join(' · '))}</p>
                 <div class="nm-selected__items">${selectedItems}</div>
-                <p>${escapeHtml(licenseFile ? licenseFile.name : label('js.noRegistrationDocument', 'No registration document selected'))} · ${escapeHtml(diplomaFile ? diplomaFile.name : label('js.noCredential', 'No credential selected'))}</p>
+                <p>${escapeHtml(licenseFile ? licenseFile.name : label('js.noRegistrationDocument', 'No registration document selected'))} · ${escapeHtml(diplomaFile ? diplomaFile.name : label('js.noCredential', 'No credential selected'))} · ${escapeHtml(identityFile ? identityFile.name : label('js.noIdentityDocument', 'No ID, driving license, or passport copy selected'))}</p>
             `;
         }
 

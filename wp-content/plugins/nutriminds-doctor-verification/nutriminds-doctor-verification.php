@@ -151,22 +151,18 @@ final class NutriMinds_Doctor_Verification {
         $last_name = $this->posted_text('last_name');
         $email = sanitize_email((string) wp_unslash($_POST['email'] ?? ''));
         $phone = $this->posted_text('phone');
-        $license_number = $this->posted_text('license_number');
+        $address = $this->posted_text('address');
         $terms = !empty($_POST['terms']);
         $platform_consent = !empty($_POST['platform_consent']);
         $selected_specialties = $this->posted_specialties();
         $primary_specialty = $this->posted_text('primary_specialty');
 
-        if ($first_name === '' || $last_name === '' || !is_email($email) || $phone === '' || $license_number === '' || !$terms || !$platform_consent || $selected_specialties === [] || $primary_specialty === '') {
+        if ($first_name === '' || $last_name === '' || !is_email($email) || $phone === '' || !$terms || !$platform_consent || $selected_specialties === [] || $primary_specialty === '') {
             wp_send_json_error(['message' => $this->t('ajax.requiredFields')], 400);
         }
 
         if (!$this->is_valid_phone($phone)) {
             wp_send_json_error(['message' => $this->t('ajax.phoneError')], 400);
-        }
-
-        if (!$this->is_valid_license_number($license_number)) {
-            wp_send_json_error(['message' => $this->t('ajax.licenseError')], 400);
         }
 
         $post_id = wp_insert_post([
@@ -182,8 +178,9 @@ final class NutriMinds_Doctor_Verification {
 
         $license_attachment_id = $this->handle_application_upload('license_file', (int) $post_id);
         $credential_attachment_id = $this->handle_application_upload('diploma_file', (int) $post_id);
+        $identity_attachment_id = $this->handle_application_upload('id_file', (int) $post_id);
 
-        if (is_wp_error($license_attachment_id) || is_wp_error($credential_attachment_id)) {
+        if (is_wp_error($license_attachment_id) || is_wp_error($credential_attachment_id) || is_wp_error($identity_attachment_id)) {
             wp_delete_post((int) $post_id, true);
             wp_send_json_error(['message' => $this->t('ajax.uploadError')], 400);
         }
@@ -193,12 +190,13 @@ final class NutriMinds_Doctor_Verification {
         update_post_meta((int) $post_id, self::META_PREFIX . 'last_name', $last_name);
         update_post_meta((int) $post_id, self::META_PREFIX . 'email', $email);
         update_post_meta((int) $post_id, self::META_PREFIX . 'phone', $phone);
-        update_post_meta((int) $post_id, self::META_PREFIX . 'license_number', $license_number);
+        update_post_meta((int) $post_id, self::META_PREFIX . 'address', $address);
         update_post_meta((int) $post_id, self::META_PREFIX . 'language', $language ?: $this->get_current_language());
         update_post_meta((int) $post_id, self::META_PREFIX . 'specialties', $selected_specialties);
         update_post_meta((int) $post_id, self::META_PREFIX . 'primary_specialty', $primary_specialty);
         update_post_meta((int) $post_id, self::META_PREFIX . 'license_attachment_id', (int) $license_attachment_id);
         update_post_meta((int) $post_id, self::META_PREFIX . 'credential_attachment_id', (int) $credential_attachment_id);
+        update_post_meta((int) $post_id, self::META_PREFIX . 'identity_attachment_id', (int) $identity_attachment_id);
         update_post_meta((int) $post_id, self::META_PREFIX . 'submitted_at', current_time('mysql'));
         update_post_meta((int) $post_id, self::META_PREFIX . 'terms_agreed', '1');
         update_post_meta((int) $post_id, self::META_PREFIX . 'platform_consent', '1');
@@ -543,7 +541,7 @@ final class NutriMinds_Doctor_Verification {
         $this->render_detail_row('Name', trim($fields['first_name'] . ' ' . $fields['last_name']));
         $this->render_detail_row('Email', $fields['email']);
         $this->render_detail_row('Phone', $fields['phone']);
-        $this->render_detail_row('License / registration number', $fields['license_number']);
+        $this->render_detail_row('Address', $fields['address'] !== '' ? $fields['address'] : 'Not provided');
         $this->render_detail_row('Language', strtoupper($fields['language']));
         $this->render_detail_row('Submitted', $fields['submitted_at']);
         echo '</tbody></table>';
@@ -563,6 +561,7 @@ final class NutriMinds_Doctor_Verification {
         echo '<h3>Documents</h3>';
         echo '<p>' . $this->document_link((int) $fields['license_attachment_id'], 'Professional license / registration') . '</p>';
         echo '<p>' . $this->document_link((int) $fields['credential_attachment_id'], 'Diploma / credential') . '</p>';
+        echo '<p>' . $this->document_link((int) $fields['identity_attachment_id'], 'ID / driving license / passport') . '</p>';
     }
 
     public function render_application_status_meta_box(WP_Post $post): void {
@@ -705,9 +704,10 @@ final class NutriMinds_Doctor_Verification {
                 'js.professionCountPlural',
                 'js.selectedTitle',
                 'js.reviewTitle',
-                'js.registrationLabel',
+                'js.addressLabel',
                 'js.noRegistrationDocument',
                 'js.noCredential',
+                'js.noIdentityDocument',
                 'js.frontendComplete',
                 'js.noResults',
                 'js.submitting',
@@ -716,7 +716,6 @@ final class NutriMinds_Doctor_Verification {
                 'validation.required',
                 'validation.email',
                 'validation.phone',
-                'validation.licenseNumber',
                 'validation.fileRequired',
                 'validation.fileSize',
                 'validation.fileType',
@@ -1038,11 +1037,12 @@ final class NutriMinds_Doctor_Verification {
             'last_name',
             'email',
             'phone',
-            'license_number',
+            'address',
             'language',
             'primary_specialty',
             'license_attachment_id',
             'credential_attachment_id',
+            'identity_attachment_id',
             'submitted_at',
         ];
         $fields = [];
@@ -1427,16 +1427,6 @@ final class NutriMinds_Doctor_Verification {
         return (bool) preg_match('/^\+?[\d\s().-]{7,24}$/', $phone) && strlen($digits) >= 7 && strlen($digits) <= 20;
     }
 
-    private function is_valid_license_number(string $license_number): bool {
-        $normalized = trim(preg_replace('/\s+/', ' ', $license_number) ?? '');
-        $alphanumeric_count = preg_match_all('/[A-Za-z0-9]/', $normalized);
-
-        if ($normalized === '' || strlen($normalized) < 4 || strlen($normalized) > 60 || $alphanumeric_count < 4) {
-            return false;
-        }
-
-        return (bool) preg_match('/^[A-Za-zÄÖÜäöüß0-9][A-Za-zÄÖÜäöüß0-9 .:\/#_-]*$/u', $normalized);
-    }
 }
 
 new NutriMinds_Doctor_Verification();

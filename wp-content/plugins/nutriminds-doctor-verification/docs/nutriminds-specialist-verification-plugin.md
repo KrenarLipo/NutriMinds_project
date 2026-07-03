@@ -82,7 +82,7 @@ JavaScript text and profession data are passed from PHP using:
 
 The template also prints a `data-nm-registration-config` JSON block so the frontend can reliably read the larger profession lists.
 
-Validation currently checks required text fields, email format, phone format, professional registration/license reference format, required profession selection, required consent checkboxes, required document uploads, file type, and a maximum file size of 10 MB. The backend repeats the phone, license-reference, required-field, file-size, and allowed-file-type checks before storing the application.
+Validation currently checks required text fields, email format, phone format, required profession selection, required consent checkboxes, required document uploads, file type, and a maximum file size of 10 MB. The backend repeats the phone, required-field, file-size, and allowed-file-type checks before storing the application.
 
 ### assets/css/registration.css
 
@@ -99,20 +99,17 @@ This file contains the visual style for the specialist verification form and lan
 - menu flag styling
 - Dosis font loaded through WordPress and applied globally across the public website with `font-family: 'Dosis', Sans-serif;`
 
-## Professional License Validation
+## Document-Based Verification
 
-The German professional-license field is intentionally flexible because the professions in the list do not share a single universal identifier.
+The form no longer collects a typed professional-license number. Instead, verification is based on uploaded documents, because the professions in the list do not share a single universal identifier and the safest review path is document-based.
 
-Examples accepted by the form:
+Required uploads:
 
-- Approbation document/reference
-- Berufserlaubnis document/reference
-- LANR, normally 9 digits for physicians
-- EFN, normally 15 digits for continuing medical education contexts
-- Kammermitgliedsnummer / chamber membership number
-- Heilpraktiker-Erlaubnis or official file/reference number
+- Professional license or registration document. Germany examples include Approbation, Berufserlaubnis, LANR/EFN evidence where relevant, chamber membership evidence, or Heilpraktiker-Erlaubnis.
+- Diploma, certificate, or specialist field credential.
+- Identity document copy, such as ID, driving license, or passport.
 
-Frontend and backend validation require 4-60 characters, at least four letters/numbers, and only letters, numbers, spaces, dots, colons, slashes, hyphens, underscores, or `#`.
+The address field in the personal-details step is optional and is stored only to help admins match documents when needed.
 
 Research notes:
 
@@ -205,10 +202,11 @@ The current frontend form collects:
 - last name
 - email
 - phone
-- professional registration number
+- optional address
 - selected profession and specialist fields
 - registration document upload control
 - credential document upload control
+- ID, driving license, or passport upload control
 - terms consent
 - platform account invitation consent
 
@@ -220,7 +218,7 @@ The first local backend/admin slice is implemented.
 
 - Frontend submissions create a `nm_specialist_app` custom post.
 - The initial application status is stored as `pending`.
-- Uploaded registration and credential documents are stored as WordPress attachments connected to the application.
+- Uploaded registration, credential, and identity documents are stored as WordPress attachments connected to the application.
 - Admins can open `NutriMinds > Applications` in the dashboard.
 - The admin queue has `Pending`, `Approved`, and `Rejected` tabs.
 - Pending applications can be approved or rejected locally.
