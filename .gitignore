@@ -1,5 +1,6 @@
 # Local WordPress configuration and secrets
 wp-config.php
+wp-content/plugins/nutriminds-doctor-verification/docs/
 
 # WordPress generated content
 wp-content/uploads/

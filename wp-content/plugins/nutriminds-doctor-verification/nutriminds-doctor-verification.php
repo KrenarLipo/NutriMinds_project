@@ -2,7 +2,8 @@
 /**
  * Plugin Name: NutriMinds Specialist Verification
  * Description: Frontend registration intake for NutriMinds gut health specialist verification.
- * Version: 0.4.0
+ * Version: 0.5.0
+ * Requires PHP: 8.2
  * Author: NutriMinds
  * Text Domain: nutriminds-doctor-verification
  */
@@ -13,7 +14,7 @@ if (!defined('ABSPATH')) {
 
 final class NutriMinds_Doctor_Verification {
     private const SHORTCODE = 'nutriminds_registration';
-    private const VERSION = '0.4.0';
+    private const VERSION = '0.5.0';
     private const DEFAULT_LANGUAGE = 'en';
     private const LANGUAGE_COOKIE = 'nutriminds_lang';
     private const POST_TYPE = 'nm_specialist_app';
@@ -27,6 +28,10 @@ final class NutriMinds_Doctor_Verification {
     private const PLATFORM_DEFAULT_ENDPOINT = 'https://os.nutriminds.net/api';
     private const REST_NAMESPACE = 'nutriminds/v1';
     private const MANAGE_CAPABILITY = 'nutriminds_manage_applications';
+    private const DOCUMENT_UPLOAD_SUBDIR = 'subidas';
+    private const PER_PAGE_OPTIONS = [20, 30, 50, 100];
+    private const DEFAULT_PER_PAGE = 30;
+    private const PER_PAGE_USER_META = 'nutriminds_applications_per_page';
 
     private array $translations = [];
     private ?string $current_language = null;
@@ -203,6 +208,11 @@ final class NutriMinds_Doctor_Verification {
         $identity_attachment_id = $this->handle_application_upload('id_file', (int) $post_id);
 
         if (is_wp_error($license_attachment_id) || is_wp_error($credential_attachment_id) || is_wp_error($identity_attachment_id)) {
+            foreach ([$license_attachment_id, $credential_attachment_id, $identity_attachment_id] as $attachment_id) {
+                if (!is_wp_error($attachment_id) && $attachment_id) {
+                    wp_delete_attachment((int) $attachment_id, true);
+                }
+            }
             wp_delete_post((int) $post_id, true);
             wp_send_json_error(['message' => $this->t('ajax.uploadError')], 400);
         }
@@ -277,9 +287,13 @@ final class NutriMinds_Doctor_Verification {
             $status = 'pending';
         }
 
+        $per_page = $this->get_applications_per_page();
+        $paged = isset($_GET['paged']) ? max(1, absint($_GET['paged'])) : 1;
+
         $applications = new WP_Query([
             'post_type' => self::POST_TYPE,
-            'posts_per_page' => 50,
+            'posts_per_page' => $per_page,
+            'paged' => $paged,
             'post_status' => 'publish',
             'orderby' => 'date',
             'order' => 'DESC',
@@ -295,6 +309,7 @@ final class NutriMinds_Doctor_Verification {
         echo '<h1>NutriMinds Specialist Applications</h1>';
         $this->render_admin_notice();
         $this->render_status_tabs($status);
+        $this->render_per_page_selector($status, $per_page);
 
         echo '<table class="widefat fixed striped">';
         echo '<thead><tr>';
@@ -312,7 +327,58 @@ final class NutriMinds_Doctor_Verification {
         }
 
         echo '</tbody></table>';
+        $this->render_pagination($status, $per_page, $paged, (int) $applications->max_num_pages);
         echo '</div>';
+    }
+
+    private function get_applications_per_page(): int {
+        $requested = isset($_GET['per_page']) ? absint($_GET['per_page']) : 0;
+
+        if (in_array($requested, self::PER_PAGE_OPTIONS, true)) {
+            update_user_meta(get_current_user_id(), self::PER_PAGE_USER_META, $requested);
+
+            return $requested;
+        }
+
+        $saved = (int) get_user_meta(get_current_user_id(), self::PER_PAGE_USER_META, true);
+
+        return in_array($saved, self::PER_PAGE_OPTIONS, true) ? $saved : self::DEFAULT_PER_PAGE;
+    }
+
+    private function render_per_page_selector(string $status, int $per_page): void {
+        echo '<form method="get" class="nm-per-page" style="margin:12px 0;">';
+        echo '<input type="hidden" name="page" value="nutriminds-verification">';
+        echo '<input type="hidden" name="status" value="' . esc_attr($status) . '">';
+        echo '<label for="nm-per-page-select">Applications per page: </label>';
+        echo '<select id="nm-per-page-select" name="per_page" onchange="this.form.submit()">';
+        foreach (self::PER_PAGE_OPTIONS as $option) {
+            echo '<option value="' . esc_attr((string) $option) . '"' . selected($per_page, $option, false) . '>' . esc_html((string) $option) . '</option>';
+        }
+        echo '</select>';
+        echo '<noscript><button type="submit" class="button">Apply</button></noscript>';
+        echo '</form>';
+    }
+
+    private function render_pagination(string $status, int $per_page, int $current_page, int $total_pages): void {
+        if ($total_pages < 2) {
+            return;
+        }
+
+        $links = paginate_links([
+            'base' => add_query_arg('paged', '%#%'),
+            'format' => '',
+            'current' => $current_page,
+            'total' => $total_pages,
+            'add_args' => [
+                'page' => 'nutriminds-verification',
+                'status' => $status,
+                'per_page' => $per_page,
+            ],
+        ]);
+
+        if ($links) {
+            echo '<div class="nm-pagination" style="margin:16px 0;">' . $links . '</div>';
+        }
     }
 
     public function handle_application_decision(): void {
@@ -909,9 +975,19 @@ final class NutriMinds_Doctor_Verification {
         require_once ABSPATH . 'wp-admin/includes/media.php';
         require_once ABSPATH . 'wp-admin/includes/image.php';
 
+        add_filter('upload_dir', [$this, 'redirect_upload_to_protected_folder']);
         $attachment_id = media_handle_upload($field, $post_id);
+        remove_filter('upload_dir', [$this, 'redirect_upload_to_protected_folder']);
 
         return is_wp_error($attachment_id) ? $attachment_id : (int) $attachment_id;
+    }
+
+    public function redirect_upload_to_protected_folder(array $dirs): array {
+        $dirs['subdir'] = '/' . self::DOCUMENT_UPLOAD_SUBDIR . $dirs['subdir'];
+        $dirs['path'] = $dirs['basedir'] . $dirs['subdir'];
+        $dirs['url'] = $dirs['baseurl'] . $dirs['subdir'];
+
+        return $dirs;
     }
 
     private function send_rejection_email(int $post_id): bool {
