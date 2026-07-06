@@ -1172,13 +1172,8 @@ final class NutriMinds_Doctor_Verification {
         }
 
         $settings = $this->get_platform_settings();
-        if (($settings['mailpit_enabled'] ?? '0') === '1') {
-            return true;
-        }
 
-        $host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
-
-        return in_array($host, ['localhost', '127.0.0.1'], true);
+        return ($settings['mailpit_enabled'] ?? '0') === '1';
     }
 
     private function find_approved_application_by_email(string $email): int {
