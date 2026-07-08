@@ -60,22 +60,28 @@ if (!defined('ABSPATH')) {
                     </label>
                 </div>
 
-                <label>
-                    <span><?php echo esc_html($this->t('details.email')); ?></span>
-                    <input type="email" name="email" autocomplete="email" required>
-                </label>
-
                 <div class="nm-grid nm-grid--two">
+                    <label>
+                        <span><?php echo esc_html($this->t('details.email')); ?></span>
+                        <input type="email" name="email" autocomplete="email" required>
+                    </label>
                     <label>
                         <span><?php echo esc_html($this->t('details.phone')); ?></span>
                         <input type="tel" name="phone" autocomplete="tel" required>
                     </label>
+                </div>
+
+                <div class="nm-grid nm-grid--two">
                     <label>
                         <span><?php echo esc_html($this->t('details.address')); ?></span>
-                        <input type="text" name="address" autocomplete="street-address" placeholder="<?php echo esc_attr($this->t('details.addressPlaceholder')); ?>">
-                        <small class="nm-field-hint"><?php echo esc_html($this->t('details.addressHelp')); ?></small>
+                        <input type="text" name="address" autocomplete="address-line1" placeholder="<?php echo esc_attr($this->t('details.addressPlaceholder')); ?>">
+                    </label>
+                    <label>
+                        <span><?php echo esc_html($this->t('details.address2')); ?></span>
+                        <input type="text" name="address_2" autocomplete="address-line2" placeholder="<?php echo esc_attr($this->t('details.address2Placeholder')); ?>">
                     </label>
                 </div>
+                <small class="nm-field-hint"><?php echo esc_html($this->t('details.addressHelp')); ?></small>
             </div>
 
             <div class="nm-registration__panel" data-nm-step="2">

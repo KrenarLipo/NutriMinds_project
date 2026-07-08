@@ -539,10 +539,16 @@ textarea {
     margin-top: 8px;
 }
 
-.nm-check {
+.nm-registration label.nm-check {
     align-items: flex-start;
     display: flex;
     gap: 10px;
+    margin-bottom: 14px;
+}
+
+.nm-registration label.nm-check > span {
+    display: inline;
+    margin-bottom: 0;
 }
 
 .nm-check input {

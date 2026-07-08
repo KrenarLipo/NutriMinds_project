@@ -400,7 +400,7 @@
             const licenseFile = form.elements.license_file.files[0];
             const diplomaFile = form.elements.diploma_file.files[0];
             const identityFile = form.elements.id_file.files[0];
-            const address = getValue('address');
+            const address = [getValue('address'), getValue('address_2')].filter(Boolean).join(', ');
             const contactParts = [getValue('phone')];
             if (address) {
                 contactParts.push(`${label('js.addressLabel', 'Address')}: ${address}`);

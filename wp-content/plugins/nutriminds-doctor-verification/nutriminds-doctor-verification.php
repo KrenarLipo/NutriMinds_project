@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NutriMinds Specialist Verification
  * Description: Frontend registration intake for NutriMinds gut health specialist verification.
- * Version: 0.6.1
+ * Version: 0.8.1
  * Requires PHP: 8.2
  * Author: NutriMinds
  * Text Domain: nutriminds-doctor-verification
@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 
 final class NutriMinds_Doctor_Verification {
     private const SHORTCODE = 'nutriminds_registration';
-    private const VERSION = '0.6.1';
+    private const VERSION = '0.8.1';
     private const DEFAULT_LANGUAGE = 'en';
     private const LANGUAGE_COOKIE = 'nutriminds_lang';
     private const POST_TYPE = 'nm_specialist_app';
@@ -60,6 +60,8 @@ final class NutriMinds_Doctor_Verification {
         add_action('admin_init', [$this, 'ensure_manage_capability_granted']);
         add_filter('pre_set_site_transient_update_plugins', [$this, 'check_for_plugin_update']);
         add_filter('plugins_api', [$this, 'provide_plugin_information'], 10, 3);
+        add_action('wp_ajax_nutriminds_check_new_applications', [$this, 'handle_check_new_applications']);
+        add_action('admin_enqueue_scripts', [$this, 'register_admin_notification_assets']);
     }
 
     public static function activate(): void {
@@ -208,6 +210,44 @@ final class NutriMinds_Doctor_Verification {
         );
     }
 
+    public function register_admin_notification_assets(): void {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
+        $base_url = plugin_dir_url(__FILE__);
+
+        wp_enqueue_style(
+            'nutriminds-admin-notifications',
+            $base_url . 'assets/css/admin-notifications.css',
+            [],
+            self::VERSION
+        );
+
+        wp_enqueue_script(
+            'nutriminds-admin-notifications',
+            $base_url . 'assets/js/admin-notifications.js',
+            [],
+            self::VERSION,
+            true
+        );
+
+        $latest = $this->get_latest_pending_application();
+
+        wp_localize_script(
+            'nutriminds-admin-notifications',
+            'NutriMindsAdminNotifications',
+            [
+                'ajaxUrl' => admin_url('admin-ajax.php'),
+                'action' => 'nutriminds_check_new_applications',
+                'nonce' => wp_create_nonce('nutriminds_admin_notifications'),
+                'pollIntervalMs' => 60000,
+                'initialLatestId' => $latest['id'],
+                'applicationsUrl' => admin_url('admin.php?page=nutriminds-verification'),
+            ]
+        );
+    }
+
     public function render_registration_form(): string {
         wp_enqueue_script('nutriminds-registration');
         wp_localize_script(
@@ -226,13 +266,13 @@ final class NutriMinds_Doctor_Verification {
     public function register_application_post_type(): void {
         register_post_type(self::POST_TYPE, [
             'labels' => [
-                'name' => 'Specialist Applications',
-                'singular_name' => 'Specialist Application',
-                'add_new_item' => 'Add Specialist Application',
-                'edit_item' => 'Specialist Application Details',
-                'view_item' => 'View Specialist Application',
-                'search_items' => 'Search Specialist Applications',
-                'not_found' => 'No specialist applications found',
+                'name' => 'Expert Applications',
+                'singular_name' => 'Expert Application',
+                'add_new_item' => 'Add Expert Application',
+                'edit_item' => 'Expert Application Details',
+                'view_item' => 'View Expert Application',
+                'search_items' => 'Search Expert Applications',
+                'not_found' => 'No expert applications found',
             ],
             'public' => false,
             'show_ui' => true,
@@ -268,6 +308,7 @@ final class NutriMinds_Doctor_Verification {
         $email = sanitize_email((string) wp_unslash($_POST['email'] ?? ''));
         $phone = $this->posted_text('phone');
         $address = $this->posted_text('address');
+        $address_2 = $this->posted_text('address_2');
         $terms = !empty($_POST['terms']);
         $platform_consent = !empty($_POST['platform_consent']);
         $selected_specialties = $this->posted_specialties();
@@ -312,6 +353,7 @@ final class NutriMinds_Doctor_Verification {
         update_post_meta((int) $post_id, self::META_PREFIX . 'email', $email);
         update_post_meta((int) $post_id, self::META_PREFIX . 'phone', $phone);
         update_post_meta((int) $post_id, self::META_PREFIX . 'address', $address);
+        update_post_meta((int) $post_id, self::META_PREFIX . 'address_2', $address_2);
         update_post_meta((int) $post_id, self::META_PREFIX . 'language', $language ?: $this->get_current_language());
         update_post_meta((int) $post_id, self::META_PREFIX . 'specialties', $selected_specialties);
         update_post_meta((int) $post_id, self::META_PREFIX . 'primary_specialty', $primary_specialty);
@@ -329,9 +371,12 @@ final class NutriMinds_Doctor_Verification {
     }
 
     public function register_admin_menu(): void {
+        $pending_count = $this->application_count('pending');
+        $badge = $this->render_pending_count_badge($pending_count);
+
         add_menu_page(
             'NutriMinds Verification',
-            'NutriMinds',
+            'NutriMinds' . $badge,
             'manage_options',
             'nutriminds-verification',
             [$this, 'render_admin_applications_page'],
@@ -342,7 +387,7 @@ final class NutriMinds_Doctor_Verification {
         add_submenu_page(
             'nutriminds-verification',
             'Applications',
-            'Applications',
+            'Applications' . $badge,
             'manage_options',
             'nutriminds-verification',
             [$this, 'render_admin_applications_page']
@@ -395,7 +440,7 @@ final class NutriMinds_Doctor_Verification {
         ]);
 
         echo '<div class="wrap nm-admin">';
-        echo '<h1>NutriMinds Specialist Applications</h1>';
+        echo '<h1>NutriMinds Expert Applications</h1>';
         $this->render_admin_notice();
         $this->render_status_tabs($status);
         $this->render_per_page_selector($status, $per_page);
@@ -577,7 +622,7 @@ final class NutriMinds_Doctor_Verification {
         echo '<div class="wrap nm-admin">';
         echo '<h1>NutriMinds Platform Settings</h1>';
         $this->render_platform_settings_notice();
-        echo '<p>Use this staging integration to send approved specialist applications to the Ocelot Signup mutation.</p>';
+        echo '<p>Use this staging integration to send approved expert applications to the Ocelot Signup mutation.</p>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
         echo '<input type="hidden" name="action" value="nutriminds_save_platform_settings">';
         wp_nonce_field('nutriminds_platform_settings');
@@ -591,10 +636,10 @@ final class NutriMinds_Doctor_Verification {
         echo '<tr><th scope="row"><label for="platform_invite_code">Invite code</label></th><td><input type="text" id="platform_invite_code" name="platform_invite_code" class="regular-text" value="' . esc_attr($settings['invite_code']) . '"><p class="description">Optional. Leave blank to send null.</p></td></tr>';
         echo '</tbody></table>';
         echo '<h2>Inbound data endpoint</h2>';
-        echo '<p>Use this endpoint when Ocelot needs approved specialist data for prefill, badges, and verification.</p>';
+        echo '<p>Use this endpoint when Ocelot needs approved expert data for prefill, badges, and verification.</p>';
         echo '<table class="form-table" role="presentation"><tbody>';
         echo '<tr><th scope="row">Endpoint URL</th><td><code>' . esc_html(rest_url(self::REST_NAMESPACE . '/application')) . '</code><p class="description">POST JSON to this URL. Do not send the applicant email in the query string.</p></td></tr>';
-        echo '<tr><th scope="row">Enable endpoint</th><td><label><input type="checkbox" name="inbound_enabled" value="1" ' . checked($settings['inbound_enabled'], '1', false) . '> Allow Ocelot to request approved specialist data</label></td></tr>';
+        echo '<tr><th scope="row">Enable endpoint</th><td><label><input type="checkbox" name="inbound_enabled" value="1" ' . checked($settings['inbound_enabled'], '1', false) . '> Allow Ocelot to request approved expert data</label></td></tr>';
         echo '<tr><th scope="row"><label for="inbound_token">Endpoint token</label></th><td>';
         echo '<input type="password" id="inbound_token" name="inbound_token" class="regular-text" value="" autocomplete="new-password" placeholder="' . esc_attr($settings['inbound_token'] !== '' ? 'Leave blank to keep the saved token' : 'Paste or generate a strong token') . '">';
         echo '<p class="description">' . esc_html($settings['inbound_token'] !== '' ? 'A token is configured. It is never displayed after saving.' : 'No inbound token is configured yet.') . '</p>';
@@ -655,7 +700,7 @@ final class NutriMinds_Doctor_Verification {
 
         $post_id = $this->find_approved_application_by_email($email);
         if (!$post_id) {
-            return new WP_Error('nutriminds_not_found', 'No approved specialist application was found for this email.', ['status' => 404]);
+            return new WP_Error('nutriminds_not_found', 'No approved expert application was found for this email.', ['status' => 404]);
         }
 
         update_post_meta($post_id, self::META_PREFIX . 'data_endpoint_last_accessed_at', current_time('mysql'));
@@ -718,7 +763,8 @@ final class NutriMinds_Doctor_Verification {
         $this->render_detail_row('Name', trim($fields['first_name'] . ' ' . $fields['last_name']));
         $this->render_detail_row('Email', $fields['email']);
         $this->render_detail_row('Phone', $fields['phone']);
-        $this->render_detail_row('Address', $fields['address'] !== '' ? $fields['address'] : 'Not provided');
+        $this->render_detail_row('Address 1', $fields['address'] !== '' ? $fields['address'] : 'Not provided');
+        $this->render_detail_row('Address 2', $fields['address_2'] !== '' ? $fields['address_2'] : 'Not provided');
         $this->render_detail_row('Language', strtoupper($fields['language']));
         $this->render_detail_row('Submitted', $fields['submitted_at']);
         echo '</tbody></table>';
@@ -1216,6 +1262,7 @@ final class NutriMinds_Doctor_Verification {
             'email',
             'phone',
             'address',
+            'address_2',
             'language',
             'primary_specialty',
             'license_attachment_id',
@@ -1558,6 +1605,63 @@ final class NutriMinds_Doctor_Verification {
         ]);
 
         return (int) $query->found_posts;
+    }
+
+    private function get_latest_pending_application(): array {
+        $query = new WP_Query([
+            'post_type' => self::POST_TYPE,
+            'post_status' => 'publish',
+            'posts_per_page' => 1,
+            'orderby' => 'date',
+            'order' => 'DESC',
+            'fields' => 'ids',
+            'meta_query' => [
+                [
+                    'key' => self::META_STATUS,
+                    'value' => 'pending',
+                ],
+            ],
+        ]);
+
+        $ids = $query->posts;
+        if (!is_array($ids) || !isset($ids[0])) {
+            return ['id' => 0, 'name' => ''];
+        }
+
+        $post_id = (int) $ids[0];
+        $fields = $this->get_application_fields($post_id);
+        $name = trim($fields['first_name'] . ' ' . $fields['last_name']);
+
+        return ['id' => $post_id, 'name' => $name !== '' ? $name : $fields['email']];
+    }
+
+    public function handle_check_new_applications(): void {
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Not allowed.'], 403);
+        }
+
+        if (!check_ajax_referer('nutriminds_admin_notifications', 'nonce', false)) {
+            wp_send_json_error(['message' => 'Invalid request.'], 403);
+        }
+
+        $latest = $this->get_latest_pending_application();
+
+        wp_send_json_success([
+            'pendingCount' => $this->application_count('pending'),
+            'latestId' => $latest['id'],
+            'latestName' => $latest['name'],
+        ]);
+    }
+
+    private function render_pending_count_badge(int $count): string {
+        if ($count < 1) {
+            return '';
+        }
+
+        return sprintf(
+            ' <span class="awaiting-mod count-%1$d"><span class="pending-count">%1$d</span></span>',
+            $count
+        );
     }
 
     private function format_specialty_summary(int $post_id): string {
