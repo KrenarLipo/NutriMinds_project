@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NutriMinds Specialist Verification
  * Description: Frontend registration intake for NutriMinds gut health specialist verification.
- * Version: 0.8.1
+ * Version: 0.8.3
  * Requires PHP: 8.2
  * Author: NutriMinds
  * Text Domain: nutriminds-doctor-verification
@@ -14,11 +14,12 @@ if (!defined('ABSPATH')) {
 
 final class NutriMinds_Doctor_Verification {
     private const SHORTCODE = 'nutriminds_registration';
-    private const VERSION = '0.8.1';
+    private const VERSION = '0.8.3';
     private const DEFAULT_LANGUAGE = 'en';
     private const LANGUAGE_COOKIE = 'nutriminds_lang';
     private const POST_TYPE = 'nm_specialist_app';
     private const AJAX_ACTION = 'nutriminds_submit_application';
+    private const CHECK_EMAIL_ACTION = 'nutriminds_check_email';
     private const NONCE_ACTION = 'nutriminds_registration';
     private const META_STATUS = '_nm_application_status';
     private const META_PREFIX = '_nm_application_';
@@ -36,6 +37,75 @@ final class NutriMinds_Doctor_Verification {
     private const UPDATE_MANIFEST_TRANSIENT = 'nutriminds_update_manifest';
     private const REJECTION_EMAIL_FROM = 'noreply@nutriminds.net';
 
+    // Draft mapping, specialty id => Ocelot badge id(s). Reviewed against
+    // https://github.com/IT4Change/os.nutriminds.net/blob/master/branding/data/badges-branding.ts
+    // Items with no confident badge are intentionally omitted.
+    private const SPECIALTY_BADGE_MAP = [
+        'nutritional-psychiatrist' => ['profession_psychiatry-neurology_psych', 'profession_gastroenterology_ernmed'],
+        'clinical-nutritional-psychologist' => ['profession_psychology-psychotherapy_klpsy'],
+        'research-fellow-nutritional-psychiatry' => ['association_isnpr'],
+        'dietary-intervention-trialist' => ['profession_gastroenterology_ernmed'],
+        'psychodietary-counsellor' => ['profession_nutrition-dietetics_ernb'],
+        'nutripsychiatric-nurse-practitioner' => ['profession_nursing-care_apn'],
+        'eating-behaviour-scientist' => ['association_dgess'],
+        'food-mood-researcher-msc-phd' => ['association_isnpr'],
+        'psychobiotic-researcher' => ['profession_functional-medicine_mikbi'],
+        'enteric-neuroscientist' => ['association_dgnm'],
+        'clinical-microbiome-specialist' => ['profession_functional-medicine_mikbi'],
+        'gut-brain-axis-researcher' => ['association_dgnm'],
+        'microbiome-data-scientist-bioinformatician' => ['profession_science-research_biomed'],
+        'gnotobiotic-animal-model-researcher' => ['profession_science-research_biomed'],
+        'metabolomics-specialist-gut-metabolites' => ['profession_science-research_biomed'],
+        'psychobiome-clinician-researcher' => ['association_dgnm'],
+        'behavioural-neurologist' => ['profession_psychiatry-neurology_neuro'],
+        'neuropsychiatrist' => ['profession_psychiatry-neurology_psych'],
+        'neurogastroenterologist' => ['profession_gastroenterology_gastro'],
+        'cognitive-neuroscientist' => ['profession_science-research_neuwi'],
+        'clinical-neuropsychologist' => ['profession_psychology-psychotherapy_npsy'],
+        'neurodegenerative-disease-researcher' => ['profession_psychiatry-neurology_neuro'],
+        'neuroinflammation-researcher' => ['profession_science-research_immuf'],
+        'paediatric-neurologist' => ['profession_pediatrics_paed', 'profession_psychiatry-neurology_neuro'],
+        'functional-neurologist' => ['profession_functional-medicine_fmp'],
+        'neuroimmunologist' => ['profession_science-research_immuf'],
+        'clinical-immunologist' => ['profession_dermatology-allergology_immun'],
+        'mucosal-immunologist' => ['profession_dermatology-allergology_immun'],
+        'psychoneuroimmunologist' => ['profession_science-research_immuf'],
+        'inflammasome-researcher' => ['profession_science-research_immuf'],
+        'cytokine-and-mood-disorder-researcher' => ['profession_science-research_immuf'],
+        'food-immunologist-food-allergy-researcher' => ['profession_dermatology-allergology_allg'],
+        'autoimmune-encephalitis-specialist' => ['profession_psychiatry-neurology_neuro'],
+        'microbiome-immunologist' => ['profession_functional-medicine_mikbi'],
+        'psychoneuroendocrinologist' => ['association_ese'],
+        'neuroendocrinologist' => ['association_enea'],
+        'metabolic-psychiatrist' => ['profession_psychiatry-neurology_psych'],
+        'clinical-endocrinologist' => ['association_dge'],
+        'gut-hormone-researcher' => ['profession_gastroenterology_gastro'],
+        'stress-biology-researcher' => ['profession_coaching-prevention_stress'],
+        'chrono-nutritionist-circadian-biologist' => ['profession_nutrition-dietetics_ernw'],
+        'insulin-resistance-and-brain-health-researcher' => ['association_ddg'],
+        'adipokine-and-neuroinflammation-researcher' => ['association_wof'],
+        'medical-psychologist' => ['profession_psychology-psychotherapy_klpsy'],
+        'psychosomatic-physician' => ['profession_psychiatry-neurology_psysom'],
+        'health-psychologist-chronic-disease' => ['profession_psychology-psychotherapy_gespsy'],
+        'somatic-symptom-disorder-specialist' => ['profession_psychiatry-neurology_psysom'],
+        'biofeedback-and-neurofeedback-clinician' => ['profession_coaching-prevention_entsp'],
+        'stress-and-resilience-researcher' => ['profession_coaching-prevention_resil'],
+        'interoception-researcher' => ['profession_coaching-prevention_koepsy'],
+        'pain-psychologist' => ['profession_psychiatry-neurology_schmrz'],
+        'mind-body-medicine-researcher' => ['profession_coaching-prevention_mbsr'],
+        'liaison-psychiatrist' => ['profession_psychiatry-neurology_psych'],
+        'translational-neuroscientist' => ['profession_science-research_neuwi'],
+        'precision-nutrition-researcher' => ['profession_functional-medicine_praez'],
+        'biomarker-discovery-scientist' => ['profession_science-research_biomed'],
+        'epigenetics-researcher-diet-and-brain' => ['profession_science-research_molbio'],
+        'multi-omics-data-integrator' => ['profession_science-research_biomed'],
+        'pharmacomicrobiomics-researcher' => ['profession_science-research_pharma'],
+        'systems-biology-scientist' => ['profession_science-research_biomed'],
+        'md-phd-clinician-scientist' => ['profession_science-research_biomed'],
+        'ecnp-cinp-member-neuropsychopharmacology' => ['association_ecnp', 'association_cinp'],
+        'isad-member-int-l-society-for-affective-disorders' => ['association_isad'],
+    ];
+
     private array $translations = [];
     private ?string $current_language = null;
 
@@ -46,6 +116,8 @@ final class NutriMinds_Doctor_Verification {
         add_action('wp_enqueue_scripts', [$this, 'register_assets']);
         add_action('wp_ajax_' . self::AJAX_ACTION, [$this, 'handle_application_submission']);
         add_action('wp_ajax_nopriv_' . self::AJAX_ACTION, [$this, 'handle_application_submission']);
+        add_action('wp_ajax_' . self::CHECK_EMAIL_ACTION, [$this, 'handle_check_email_status']);
+        add_action('wp_ajax_nopriv_' . self::CHECK_EMAIL_ACTION, [$this, 'handle_check_email_status']);
         add_action('admin_menu', [$this, 'register_admin_menu']);
         add_action('admin_post_nutriminds_application_decision', [$this, 'handle_application_decision']);
         add_action('admin_post_nutriminds_save_platform_settings', [$this, 'handle_save_platform_settings']);
@@ -322,6 +394,14 @@ final class NutriMinds_Doctor_Verification {
             wp_send_json_error(['message' => $this->t('ajax.phoneError')], 400);
         }
 
+        $existing_status = $this->get_latest_application_status_by_email($email);
+        if ($existing_status === 'approved') {
+            wp_send_json_error(['message' => $this->t('validation.emailApproved')], 409);
+        }
+        if ($existing_status === 'pending') {
+            wp_send_json_error(['message' => $this->t('validation.emailPending')], 409);
+        }
+
         $post_id = wp_insert_post([
             'post_type' => self::POST_TYPE,
             'post_status' => 'publish',
@@ -363,6 +443,9 @@ final class NutriMinds_Doctor_Verification {
         update_post_meta((int) $post_id, self::META_PREFIX . 'submitted_at', current_time('mysql'));
         update_post_meta((int) $post_id, self::META_PREFIX . 'terms_agreed', '1');
         update_post_meta((int) $post_id, self::META_PREFIX . 'platform_consent', '1');
+        if ($existing_status === 'rejected') {
+            update_post_meta((int) $post_id, self::META_PREFIX . 'resubmitted_after_rejection', '1');
+        }
 
         wp_send_json_success([
             'message' => $this->t('ajax.success'),
@@ -638,7 +721,7 @@ final class NutriMinds_Doctor_Verification {
         echo '<h2>Inbound data endpoint</h2>';
         echo '<p>Use this endpoint when Ocelot needs approved expert data for prefill, badges, and verification.</p>';
         echo '<table class="form-table" role="presentation"><tbody>';
-        echo '<tr><th scope="row">Endpoint URL</th><td><code>' . esc_html(rest_url(self::REST_NAMESPACE . '/application')) . '</code><p class="description">POST JSON to this URL. Do not send the applicant email in the query string.</p></td></tr>';
+        echo '<tr><th scope="row">Endpoint URL</th><td><code>' . esc_html(rest_url(self::REST_NAMESPACE . '/application')) . '?user=EMAIL</code><p class="description">GET request. Send the token as an <code>Authorization: Bearer TOKEN</code> header (or <code>X-NutriMinds-Token</code>) &mdash; never in the query string, so it does not end up in server access logs.</p></td></tr>';
         echo '<tr><th scope="row">Enable endpoint</th><td><label><input type="checkbox" name="inbound_enabled" value="1" ' . checked($settings['inbound_enabled'], '1', false) . '> Allow Ocelot to request approved expert data</label></td></tr>';
         echo '<tr><th scope="row"><label for="inbound_token">Endpoint token</label></th><td>';
         echo '<input type="password" id="inbound_token" name="inbound_token" class="regular-text" value="" autocomplete="new-password" placeholder="' . esc_attr($settings['inbound_token'] !== '' ? 'Leave blank to keep the saved token' : 'Paste or generate a strong token') . '">';
@@ -660,11 +743,11 @@ final class NutriMinds_Doctor_Verification {
 
     public function register_rest_routes(): void {
         register_rest_route(self::REST_NAMESPACE, '/application', [
-            'methods' => 'POST',
+            'methods' => 'GET',
             'callback' => [$this, 'handle_application_data_request'],
             'permission_callback' => [$this, 'authorize_application_data_request'],
             'args' => [
-                'email' => [
+                'user' => [
                     'required' => true,
                     'type' => 'string',
                 ],
@@ -693,7 +776,7 @@ final class NutriMinds_Doctor_Verification {
     }
 
     public function handle_application_data_request(WP_REST_Request $request): WP_REST_Response|WP_Error {
-        $email = sanitize_email((string) $request->get_param('email'));
+        $email = sanitize_email((string) $request->get_param('user'));
         if (!is_email($email)) {
             return new WP_Error('nutriminds_invalid_email', 'A valid email is required.', ['status' => 400]);
         }
@@ -706,6 +789,72 @@ final class NutriMinds_Doctor_Verification {
         update_post_meta($post_id, self::META_PREFIX . 'data_endpoint_last_accessed_at', current_time('mysql'));
 
         return rest_ensure_response($this->build_application_data_response($post_id));
+    }
+
+    public function handle_check_email_status(): void {
+        if (!check_ajax_referer(self::NONCE_ACTION, 'nonce', false)) {
+            wp_send_json_error(['message' => $this->t('ajax.invalidRequest')], 403);
+        }
+
+        if ($this->is_email_check_rate_limited()) {
+            wp_send_json_error(['message' => $this->t('ajax.invalidRequest')], 429);
+        }
+
+        $email = sanitize_email((string) wp_unslash($_POST['email'] ?? ''));
+        if (!is_email($email)) {
+            wp_send_json_success(['status' => 'none']);
+        }
+
+        wp_send_json_success(['status' => $this->get_latest_application_status_by_email($email) ?? 'none']);
+    }
+
+    private function is_email_check_rate_limited(): bool {
+        $key = 'nutriminds_email_check_rate_' . md5($this->get_rest_client_ip());
+        $count = (int) get_transient($key);
+
+        if ($count >= 30) {
+            return true;
+        }
+
+        set_transient($key, $count + 1, 5 * MINUTE_IN_SECONDS);
+
+        return false;
+    }
+
+    private function get_latest_application_status_by_email(string $email): ?string {
+        $approved_query = new WP_Query([
+            'post_type' => self::POST_TYPE,
+            'post_status' => 'publish',
+            'posts_per_page' => 1,
+            'fields' => 'ids',
+            'meta_query' => [
+                'relation' => 'AND',
+                ['key' => self::META_PREFIX . 'email', 'value' => $email, 'compare' => '='],
+                ['key' => self::META_STATUS, 'value' => 'approved', 'compare' => '='],
+            ],
+        ]);
+
+        if (!empty($approved_query->posts)) {
+            return 'approved';
+        }
+
+        $latest_query = new WP_Query([
+            'post_type' => self::POST_TYPE,
+            'post_status' => 'publish',
+            'posts_per_page' => 1,
+            'orderby' => 'date',
+            'order' => 'DESC',
+            'fields' => 'ids',
+            'meta_query' => [
+                ['key' => self::META_PREFIX . 'email', 'value' => $email, 'compare' => '='],
+            ],
+        ]);
+
+        if (empty($latest_query->posts)) {
+            return null;
+        }
+
+        return $this->get_application_status((int) $latest_query->posts[0]);
     }
 
     public function configure_local_mailpit($phpmailer): void {
@@ -790,6 +939,9 @@ final class NutriMinds_Doctor_Verification {
     public function render_application_status_meta_box(WP_Post $post): void {
         $status = $this->get_application_status($post->ID);
         echo '<p><strong>Status:</strong> ' . esc_html(ucfirst($status)) . '</p>';
+        if (get_post_meta($post->ID, self::META_PREFIX . 'resubmitted_after_rejection', true) === '1') {
+            echo '<p style="color:#b45309;"><strong>&#9888; Resubmission:</strong><br>This applicant was rejected before and reapplied with the same email.</p>';
+        }
         $decided_at = (string) get_post_meta($post->ID, self::META_PREFIX . 'decided_at', true);
         if ($decided_at !== '') {
             echo '<p><strong>Decided at:</strong><br>' . esc_html($decided_at) . '</p>';
@@ -934,9 +1086,13 @@ final class NutriMinds_Doctor_Verification {
                 'validation.termsRequired',
                 'validation.summaryTitle',
                 'validation.summaryIntro',
+                'validation.emailApproved',
+                'validation.emailPending',
+                'validation.emailRejected',
             ]),
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'action' => self::AJAX_ACTION,
+            'checkEmailAction' => self::CHECK_EMAIL_ACTION,
             'nonce' => wp_create_nonce(self::NONCE_ACTION),
             'specialties' => $this->get_specialties($language),
         ];
@@ -1344,50 +1500,33 @@ final class NutriMinds_Doctor_Verification {
     private function build_application_data_response(int $post_id): array {
         $fields = $this->get_application_fields($post_id);
         $specialties = array_values(array_filter($this->get_application_specialties($post_id), 'is_array'));
-        $primary_specialty = $this->find_primary_specialty($specialties, $fields['primary_specialty']);
         $display_name = trim($fields['first_name'] . ' ' . $fields['last_name']);
         $approved_at = (string) get_post_meta($post_id, self::META_PREFIX . 'decided_at', true);
 
         return [
-            'email' => $fields['email'],
-            'firstName' => $fields['first_name'],
-            'lastName' => $fields['last_name'],
-            'displayName' => $display_name,
-            'locale' => $this->normalize_platform_locale($fields['language']),
+            'user' => $fields['email'],
+            'name' => $display_name,
+            'badges' => $this->get_badges_for_specialties($specialties),
             'verification' => [
                 'status' => 'approved',
                 'source' => 'nutriminds',
                 'approvedAt' => $approved_at,
                 'externalReference' => 'nutriminds-wp-' . $post_id,
             ],
-            'primarySpecialty' => $primary_specialty,
-            'specialties' => array_values(array_map([$this, 'sanitize_specialty_for_response'], $specialties)),
         ];
     }
 
-    private function find_primary_specialty(array $specialties, string $primary_specialty_id): ?array {
-        foreach ($specialties as $specialty) {
-            if (!is_array($specialty)) {
-                continue;
-            }
+    private function get_badges_for_specialties(array $specialties): array {
+        $badges = [];
 
-            if ((string) ($specialty['id'] ?? '') === $primary_specialty_id) {
-                return $this->sanitize_specialty_for_response($specialty);
+        foreach ($specialties as $specialty) {
+            $specialty_id = (string) ($specialty['id'] ?? '');
+            foreach (self::SPECIALTY_BADGE_MAP[$specialty_id] ?? [] as $badge_id) {
+                $badges[$badge_id] = true;
             }
         }
 
-        return null;
-    }
-
-    private function sanitize_specialty_for_response(array $specialty): array {
-        $tags = $specialty['tags'] ?? [];
-
-        return [
-            'id' => (string) ($specialty['id'] ?? ''),
-            'name' => (string) ($specialty['name'] ?? ''),
-            'category' => (string) ($specialty['category'] ?? ''),
-            'tags' => is_array($tags) ? array_values(array_map('strval', $tags)) : [],
-        ];
+        return array_keys($badges);
     }
 
     private function extract_rest_bearer_token(WP_REST_Request $request): string {
@@ -1410,7 +1549,7 @@ final class NutriMinds_Doctor_Verification {
 
     private function is_rest_rate_limited(WP_REST_Request $request): bool {
         $client_ip = $this->get_rest_client_ip();
-        $email = sanitize_email((string) $request->get_param('email'));
+        $email = sanitize_email((string) $request->get_param('user'));
         $key = 'nutriminds_rest_rate_' . md5($client_ip . '|' . strtolower($email));
         $count = (int) get_transient($key);
 

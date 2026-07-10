@@ -53,9 +53,11 @@
         const validationSummary = root.querySelector('[data-nm-validation-summary]');
         const selected = new Map();
         const categories = Array.from(new Set(specialties.map((specialty) => specialty.category || '').filter(Boolean)));
+        const emailField = form.elements.email;
         let primarySpecialty = '';
         let activeCategory = 'all';
         let step = 1;
+        let emailStatusCheck = { email: '', status: null };
 
         function getValue(name) {
             const input = form.elements[name];
@@ -162,6 +164,63 @@
             specialtyList.insertAdjacentElement('afterend', error);
         }
 
+        function clearEmailStatusNote() {
+            const existing = root.querySelector('[data-nm-email-status]');
+            if (existing) {
+                existing.remove();
+            }
+        }
+
+        function setEmailStatusNote(message) {
+            clearEmailStatusNote();
+            if (!message || !emailField) {
+                return;
+            }
+            const container = emailField.closest('label') || emailField.parentElement;
+            if (!container) {
+                return;
+            }
+            const note = document.createElement('small');
+            note.className = 'nm-field-note';
+            note.dataset.nmEmailStatus = 'true';
+            note.textContent = message;
+            container.appendChild(note);
+        }
+
+        async function checkEmailStatus(email) {
+            if (!config.checkEmailAction || !email) {
+                return;
+            }
+
+            try {
+                const payload = new FormData();
+                payload.append('action', config.checkEmailAction);
+                payload.append('nonce', config.nonce || '');
+                payload.append('email', email);
+
+                const response = await fetch(config.ajaxUrl || '/wp-admin/admin-ajax.php', {
+                    method: 'POST',
+                    body: payload,
+                    credentials: 'same-origin',
+                });
+                const result = await response.json();
+                const status = (response.ok && result.success && result.data && result.data.status) || 'none';
+
+                emailStatusCheck = { email, status };
+                clearEmailStatusNote();
+
+                if (status === 'approved') {
+                    setFieldError(emailField, label('validation.emailApproved', 'This email is already registered. Please use a different email address.'));
+                } else if (status === 'pending') {
+                    setFieldError(emailField, label('validation.emailPending', 'You already have an application under review with this email.'));
+                } else if (status === 'rejected') {
+                    setEmailStatusNote(label('validation.emailRejected', 'Already tried before with this email — please include stronger documentation this time.'));
+                }
+            } catch (error) {
+                // Network hiccup: stay silent here. The server-side check at submission time is authoritative.
+            }
+        }
+
         function isAllowedFile(file) {
             const extension = file.name.split('.').pop().toLowerCase();
 
@@ -242,6 +301,21 @@
                     clearFieldError(field);
                 }
             });
+
+            if (step === 1 && emailField && emailStatusCheck.email === getValue('email')
+                && (emailStatusCheck.status === 'approved' || emailStatusCheck.status === 'pending')) {
+                const message = emailStatusCheck.status === 'approved'
+                    ? label('validation.emailApproved', 'This email is already registered. Please use a different email address.')
+                    : label('validation.emailPending', 'You already have an application under review with this email.');
+                setFieldError(emailField, message);
+                errors.push({
+                    label: fieldLabel(emailField),
+                    message,
+                });
+                if (!firstInvalid) {
+                    firstInvalid = emailField;
+                }
+            }
 
             if (step === 2) {
                 clearSpecialtyError();
@@ -475,7 +549,20 @@
                 clearFieldError(event.target);
                 clearValidationSummary();
             }
+            if (event.target === emailField) {
+                emailStatusCheck = { email: '', status: null };
+                clearEmailStatusNote();
+            }
         });
+        if (emailField) {
+            emailField.addEventListener('blur', () => {
+                const value = emailField.value.trim();
+                if (!value || !emailField.checkValidity() || emailStatusCheck.email === value) {
+                    return;
+                }
+                checkEmailStatus(value);
+            });
+        }
         form.addEventListener('change', (event) => {
             if (event.target instanceof HTMLInputElement) {
                 validateField(event.target);

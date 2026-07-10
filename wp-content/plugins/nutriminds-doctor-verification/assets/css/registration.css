@@ -309,6 +309,18 @@ textarea {
     padding: 12px 14px;
 }
 
+.nm-field-note {
+    background: var(--nm-sand-soft);
+    border-radius: 10px;
+    color: #8a5a1f;
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.35;
+    margin-top: 8px;
+    padding: 8px 12px;
+}
+
 .nm-specialties {
     display: grid;
     gap: 12px;
