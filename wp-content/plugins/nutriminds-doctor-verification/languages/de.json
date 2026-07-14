@@ -76,6 +76,7 @@
   "ajax.phoneError": "Bitte geben Sie eine gültige Telefonnummer ein.",
   "ajax.storageError": "Die Bewerbung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
   "ajax.uploadError": "Eines der Dokumente konnte nicht hochgeladen werden. Bitte verwenden Sie PDF-, JPG- oder PNG-Dateien bis 10 MB.",
+  "ajax.rateLimited": "Zu viele Übermittlungen von dieser Verbindung. Bitte versuchen Sie es später erneut.",
   "email.rejection.subject": "Aktualisierung zu Ihrer {site}-Expertenbewerbung",
   "email.rejection.defaultName": "Guten Tag",
   "email.rejection.body": "Hallo {name},\n\nvielen Dank für Ihr Interesse, {site} als Expert:in beizutreten.\n\nWir haben die eingereichten Dokumente geprüft, können sie aktuell jedoch noch nicht validieren. Das bedeutet nicht zwingend, dass Ihr beruflicher Hintergrund ungeeignet ist; es bedeutet nur, dass die aktuellen Dokumente für unseren Verifizierungsschritt noch nicht ausreichen.\n\nSie können Ihre Unterlagen gern prüfen und eine aktualisierte Bewerbung einreichen, sobald Sie bereit sind.\n\nFreundliche Grüße\n{site}",

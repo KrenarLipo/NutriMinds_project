@@ -41,6 +41,10 @@ if (!defined('ABSPATH')) {
         </ol>
 
         <form class="nm-registration__form" novalidate>
+            <label class="nm-hp-field" aria-hidden="true">
+                Website
+                <input type="text" name="website" tabindex="-1" autocomplete="off">
+            </label>
             <div class="nm-validation-summary" data-nm-validation-summary hidden tabindex="-1" role="alert" aria-live="assertive"></div>
 
             <div class="nm-registration__panel is-active" data-nm-step="1">

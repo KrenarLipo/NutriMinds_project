@@ -6,6 +6,15 @@ textarea {
     font-family: 'Dosis', Sans-serif;
 }
 
+.nm-hp-field {
+    height: 1px;
+    left: -9999px;
+    overflow: hidden;
+    position: absolute;
+    top: -9999px;
+    width: 1px;
+}
+
 .nm-registration {
     --nm-blue: #3e74b7;
     --nm-coral: #dc3c22;

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NutriMinds Specialist Verification
  * Description: Frontend registration intake for NutriMinds gut health specialist verification.
- * Version: 0.8.3
+ * Version: 0.8.4
  * Requires PHP: 8.2
  * Author: NutriMinds
  * Text Domain: nutriminds-doctor-verification
@@ -14,12 +14,13 @@ if (!defined('ABSPATH')) {
 
 final class NutriMinds_Doctor_Verification {
     private const SHORTCODE = 'nutriminds_registration';
-    private const VERSION = '0.8.3';
+    private const VERSION = '0.8.4';
     private const DEFAULT_LANGUAGE = 'en';
     private const LANGUAGE_COOKIE = 'nutriminds_lang';
     private const POST_TYPE = 'nm_specialist_app';
     private const AJAX_ACTION = 'nutriminds_submit_application';
     private const CHECK_EMAIL_ACTION = 'nutriminds_check_email';
+    private const DOWNLOAD_ACTION = 'nutriminds_download_document';
     private const NONCE_ACTION = 'nutriminds_registration';
     private const META_STATUS = '_nm_application_status';
     private const META_PREFIX = '_nm_application_';
@@ -122,6 +123,7 @@ final class NutriMinds_Doctor_Verification {
         add_action('admin_post_nutriminds_application_decision', [$this, 'handle_application_decision']);
         add_action('admin_post_nutriminds_save_platform_settings', [$this, 'handle_save_platform_settings']);
         add_action('admin_post_nutriminds_platform_retry', [$this, 'handle_platform_retry']);
+        add_action('admin_post_' . self::DOWNLOAD_ACTION, [$this, 'handle_document_download']);
         add_action('rest_api_init', [$this, 'register_rest_routes']);
         add_action('phpmailer_init', [$this, 'configure_local_mailpit']);
         add_filter('wp_mail_from', [$this, 'filter_local_mailpit_from']);
@@ -373,6 +375,19 @@ final class NutriMinds_Doctor_Verification {
 
         if (!check_ajax_referer(self::NONCE_ACTION, 'nonce', false)) {
             wp_send_json_error(['message' => $this->t('ajax.invalidRequest')], 403);
+        }
+
+        if ($this->is_submission_rate_limited()) {
+            wp_send_json_error(['message' => $this->t('ajax.rateLimited')], 429);
+        }
+
+        if ($this->posted_text('website') !== '') {
+            // Honeypot: real applicants never see or fill this field. Pretend success
+            // without storing anything, so automated fillers don't learn to avoid it.
+            wp_send_json_success([
+                'message' => $this->t('ajax.success'),
+                'applicationId' => 0,
+            ]);
         }
 
         $first_name = $this->posted_text('first_name');
@@ -693,6 +708,52 @@ final class NutriMinds_Doctor_Verification {
         exit;
     }
 
+    public function handle_document_download(): void {
+        $post_id = isset($_GET['application_id']) ? absint($_GET['application_id']) : 0;
+        $attachment_id = isset($_GET['attachment_id']) ? absint($_GET['attachment_id']) : 0;
+
+        if (!$post_id || !$attachment_id || !current_user_can(self::MANAGE_CAPABILITY)) {
+            wp_die(esc_html__('You are not allowed to view this document.', 'nutriminds-doctor-verification'), '', ['response' => 403]);
+        }
+
+        check_admin_referer('nutriminds_download_document_' . $post_id . '_' . $attachment_id);
+
+        if (get_post_type($post_id) !== self::POST_TYPE || !$this->attachment_belongs_to_application($post_id, $attachment_id)) {
+            wp_die(esc_html__('This document could not be found.', 'nutriminds-doctor-verification'), '', ['response' => 404]);
+        }
+
+        $file_path = get_attached_file($attachment_id);
+        if (!$file_path || !file_exists($file_path)) {
+            wp_die(esc_html__('This document could not be found.', 'nutriminds-doctor-verification'), '', ['response' => 404]);
+        }
+
+        $mime_type = get_post_mime_type($attachment_id) ?: 'application/octet-stream';
+
+        nocache_headers();
+        header('Content-Type: ' . $mime_type);
+        header('Content-Disposition: inline; filename="' . basename($file_path) . '"');
+        header('Content-Length: ' . (string) filesize($file_path));
+        header('X-Content-Type-Options: nosniff');
+        readfile($file_path);
+        exit;
+    }
+
+    private function attachment_belongs_to_application(int $post_id, int $attachment_id): bool {
+        $allowed_meta_keys = [
+            self::META_PREFIX . 'license_attachment_id',
+            self::META_PREFIX . 'credential_attachment_id',
+            self::META_PREFIX . 'identity_attachment_id',
+        ];
+
+        foreach ($allowed_meta_keys as $meta_key) {
+            if ((int) get_post_meta($post_id, $meta_key, true) === $attachment_id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function render_platform_settings_page(): void {
         if (!current_user_can('manage_options')) {
             wp_die(esc_html__('Sorry, you are not allowed to access this page.', 'nutriminds-doctor-verification'));
@@ -806,6 +867,19 @@ final class NutriMinds_Doctor_Verification {
         }
 
         wp_send_json_success(['status' => $this->get_latest_application_status_by_email($email) ?? 'none']);
+    }
+
+    private function is_submission_rate_limited(): bool {
+        $key = 'nutriminds_submission_rate_' . md5($this->get_rest_client_ip());
+        $count = (int) get_transient($key);
+
+        if ($count >= 8) {
+            return true;
+        }
+
+        set_transient($key, $count + 1, HOUR_IN_SECONDS);
+
+        return false;
     }
 
     private function is_email_check_rate_limited(): bool {
@@ -931,9 +1005,9 @@ final class NutriMinds_Doctor_Verification {
         }
 
         echo '<h3>Documents</h3>';
-        echo '<p>' . $this->document_link((int) $fields['license_attachment_id'], 'Professional license / registration') . '</p>';
-        echo '<p>' . $this->document_link((int) $fields['credential_attachment_id'], 'Diploma / credential') . '</p>';
-        echo '<p>' . $this->document_link((int) $fields['identity_attachment_id'], 'ID / driving license / passport') . '</p>';
+        echo '<p>' . $this->document_link((int) $fields['license_attachment_id'], 'Professional license / registration', $post->ID) . '</p>';
+        echo '<p>' . $this->document_link((int) $fields['credential_attachment_id'], 'Diploma / credential', $post->ID) . '</p>';
+        echo '<p>' . $this->document_link((int) $fields['identity_attachment_id'], 'ID / driving license / passport', $post->ID) . '</p>';
     }
 
     public function render_application_status_meta_box(WP_Post $post): void {
@@ -1285,7 +1359,31 @@ final class NutriMinds_Doctor_Verification {
         $dirs['path'] = $dirs['basedir'] . $dirs['subdir'];
         $dirs['url'] = $dirs['baseurl'] . $dirs['subdir'];
 
+        $this->ensure_protected_folder_has_htaccess($dirs['basedir'] . '/' . self::DOCUMENT_UPLOAD_SUBDIR);
+
         return $dirs;
+    }
+
+    private function ensure_protected_folder_has_htaccess(string $folder_path): void {
+        $htaccess_path = $folder_path . '/.htaccess';
+        if (file_exists($htaccess_path)) {
+            return;
+        }
+
+        if (!is_dir($folder_path)) {
+            wp_mkdir_p($folder_path);
+        }
+
+        $rules = "# NutriMinds: block direct access, files are served only through the admin download handler.\n"
+            . "<IfModule mod_authz_core.c>\n"
+            . "    Require all denied\n"
+            . "</IfModule>\n"
+            . "<IfModule !mod_authz_core.c>\n"
+            . "    Order allow,deny\n"
+            . "    Deny from all\n"
+            . "</IfModule>\n";
+
+        file_put_contents($htaccess_path, $rules);
     }
 
     private function send_rejection_email(int $post_id): bool {
@@ -1373,7 +1471,7 @@ final class NutriMinds_Doctor_Verification {
         echo '<td><strong><a href="' . esc_url(get_edit_post_link($post_id, '')) . '">' . esc_html($name ?: get_the_title($post_id)) . '</a></strong></td>';
         echo '<td><a href="mailto:' . esc_attr($fields['email']) . '">' . esc_html($fields['email']) . '</a></td>';
         echo '<td>' . esc_html($this->format_specialty_summary($post_id)) . '</td>';
-        echo '<td>' . $this->document_link((int) $fields['license_attachment_id'], 'License') . '<br>' . $this->document_link((int) $fields['credential_attachment_id'], 'Credential') . '</td>';
+        echo '<td>' . $this->document_link((int) $fields['license_attachment_id'], 'License', $post_id) . '<br>' . $this->document_link((int) $fields['credential_attachment_id'], 'Credential', $post_id) . '</td>';
         echo '<td>' . esc_html($fields['submitted_at']) . '</td>';
         echo '<td>' . esc_html(ucfirst($status)) . '</td>';
         echo '<td>' . esc_html($this->format_platform_status($post_id)) . '</td>';
@@ -1819,15 +1917,19 @@ final class NutriMinds_Doctor_Verification {
         return implode(', ', array_slice($names, 0, 3)) . ' +' . (count($names) - 3) . ' more';
     }
 
-    private function document_link(int $attachment_id, string $label): string {
+    private function document_link(int $attachment_id, string $label, int $post_id): string {
         if (!$attachment_id) {
             return esc_html($label . ': missing');
         }
 
-        $url = wp_get_attachment_url($attachment_id);
-        if (!$url) {
-            return esc_html($label . ': unavailable');
-        }
+        $url = wp_nonce_url(
+            add_query_arg([
+                'action' => self::DOWNLOAD_ACTION,
+                'application_id' => $post_id,
+                'attachment_id' => $attachment_id,
+            ], admin_url('admin-post.php')),
+            'nutriminds_download_document_' . $post_id . '_' . $attachment_id
+        );
 
         return '<a href="' . esc_url($url) . '" target="_blank" rel="noopener noreferrer">' . esc_html($label) . '</a>';
     }
