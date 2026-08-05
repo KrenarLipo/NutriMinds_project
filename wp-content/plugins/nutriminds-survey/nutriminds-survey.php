@@ -745,7 +745,7 @@ final class NutriMinds_Survey {
 
         foreach ($registrations as $registration) {
             $project_id = (int) get_post_meta($registration->ID, self::META_PREFIX . 'project_id', true);
-            fputcsv($output, [
+            fputcsv($output, array_map([$this, 'sanitize_csv_cell'], [
                 (string) get_post_meta($registration->ID, self::META_PREFIX . 'first_name', true),
                 (string) get_post_meta($registration->ID, self::META_PREFIX . 'last_name', true),
                 (string) get_post_meta($registration->ID, self::META_PREFIX . 'birthday', true),
@@ -755,11 +755,24 @@ final class NutriMinds_Survey {
                 $project_id ? (get_the_title($project_id) ?: '(deleted project)') : '',
                 (string) get_post_meta($registration->ID, self::META_PREFIX . 'language', true),
                 (string) get_post_meta($registration->ID, self::META_PREFIX . 'submitted_at', true),
-            ]);
+            ]));
         }
 
         fclose($output);
         exit;
+    }
+
+    /**
+     * Neutralizes CSV/spreadsheet formula injection: a cell starting with
+     * =, +, -, @, tab, or CR is prefixed with a single quote so Excel/Sheets
+     * treat it as text instead of executing it as a formula on open.
+     */
+    private function sanitize_csv_cell(string $value): string {
+        if ($value !== '' && preg_match('/^[=+\-@\t\r]/', $value) === 1) {
+            return "'" . $value;
+        }
+
+        return $value;
     }
 }
 
