@@ -26,6 +26,7 @@ final class NutriMinds_Survey {
     private const PROJECT_META_PREFIX = '_nms_project_';
     private const MANAGE_CAPABILITY = 'nms_manage_surveys';
     private const DEFAULT_PROJECT_TITLE = 'Nutrimind Gut Health Test';
+    private const DEFAULT_PROJECT_END_DATE = '2026-08-28';
     private const GENDER_OPTIONS = ['female', 'male'];
     private const ADMIN_CONTACT_EMAIL = 'klipo90@gmail.com';
 
@@ -85,11 +86,15 @@ final class NutriMinds_Survey {
         ]);
 
         if (empty($existing)) {
-            wp_insert_post([
+            $project_id = wp_insert_post([
                 'post_type' => self::POST_TYPE_PROJECT,
                 'post_status' => 'publish',
                 'post_title' => self::DEFAULT_PROJECT_TITLE,
             ], true);
+
+            if (!is_wp_error($project_id)) {
+                update_post_meta((int) $project_id, self::PROJECT_META_PREFIX . 'end_date', self::DEFAULT_PROJECT_END_DATE);
+            }
         }
 
         update_option('nms_default_project_seeded', '1', false);
@@ -113,9 +118,6 @@ final class NutriMinds_Survey {
             'supports' => ['title'],
             'capability_type' => 'post',
             'capabilities' => [
-                'edit_post' => self::MANAGE_CAPABILITY,
-                'read_post' => self::MANAGE_CAPABILITY,
-                'delete_post' => self::MANAGE_CAPABILITY,
                 'edit_posts' => self::MANAGE_CAPABILITY,
                 'edit_others_posts' => self::MANAGE_CAPABILITY,
                 'publish_posts' => self::MANAGE_CAPABILITY,
@@ -143,9 +145,6 @@ final class NutriMinds_Survey {
             'supports' => ['title'],
             'capability_type' => 'post',
             'capabilities' => [
-                'edit_post' => self::MANAGE_CAPABILITY,
-                'read_post' => self::MANAGE_CAPABILITY,
-                'delete_post' => self::MANAGE_CAPABILITY,
                 'edit_posts' => self::MANAGE_CAPABILITY,
                 'edit_others_posts' => self::MANAGE_CAPABILITY,
                 'publish_posts' => self::MANAGE_CAPABILITY,
@@ -191,6 +190,55 @@ final class NutriMinds_Survey {
             self::MANAGE_CAPABILITY,
             'post-new.php?post_type=' . self::POST_TYPE_PROJECT
         );
+
+        add_submenu_page(
+            'edit.php?post_type=' . self::POST_TYPE_REGISTRATION,
+            'Help',
+            'Help',
+            self::MANAGE_CAPABILITY,
+            'nms_help',
+            [$this, 'render_help_page']
+        );
+    }
+
+    public function render_help_page(): void {
+        if (!current_user_can(self::MANAGE_CAPABILITY)) {
+            return;
+        }
+
+        $shortcode = '[' . self::SHORTCODE . ']';
+        ?>
+        <div class="wrap">
+            <h1>NutriMinds Survey — Help</h1>
+
+            <h2>What this plugin does</h2>
+            <p>Displays a public registration form for NutriMinds research/collaboration projects and stores every submission as a Registration entry in this dashboard.</p>
+
+            <h2>Adding the form to a page</h2>
+            <p>Add this shortcode to any page or post:</p>
+            <p><code><?php echo esc_html($shortcode); ?></code></p>
+            <p>The form automatically lists every currently active project as a dropdown option, so it stays up to date without editing the page.</p>
+
+            <h2>Managing projects</h2>
+            <ul>
+                <li>Go to <strong>NutriMinds Survey → Projects</strong> to see all projects, or <strong>Add New Project</strong> to create one.</li>
+                <li>Each project has an optional <strong>Start date</strong> and <strong>End date</strong>, set on the project's edit screen.</li>
+                <li>Leave the start date blank to make a project active immediately; leave the end date blank to keep it open-ended.</li>
+                <li>A project is <strong>Active</strong> only between its start and end date (inclusive) and only then appears on the public form. Once the end date passes, it automatically becomes <strong>Passive</strong> — it stays in the dashboard with its past registrations, it just stops being offered to new registrants.</li>
+                <li>The Projects list shows each project's current status in the <strong>Currently active</strong> column.</li>
+                <li>To remove a project entirely, trash it from the Projects list like any other post.</li>
+            </ul>
+
+            <h2>Viewing and exporting registrations</h2>
+            <p>Go to <strong>NutriMinds Survey → All Registrations</strong> to view every submission. Use the <strong>Export all registrations (CSV)</strong> button at the top of that screen to download the full list.</p>
+
+            <h2>Duplicate protection</h2>
+            <p>A person cannot register twice with the same email or phone number — a repeat submission is blocked with a message pointing them to <?php echo esc_html(self::ADMIN_CONTACT_EMAIL); ?>.</p>
+
+            <h2>Languages</h2>
+            <p>The form supports English and German. Visitors can switch language from the form itself; their choice is remembered for future visits.</p>
+        </div>
+        <?php
     }
 
     public function register_project_meta_box(): void {
@@ -682,7 +730,7 @@ final class NutriMinds_Survey {
             'title' => 'Project',
             'nms_start_date' => 'Start date',
             'nms_end_date' => 'End date',
-            'nms_active' => 'Currently active',
+            'nms_active' => 'Status',
             'date' => $columns['date'] ?? 'Date',
         ];
     }
@@ -699,7 +747,14 @@ final class NutriMinds_Survey {
         }
 
         if ($column === 'nms_active') {
-            echo $this->is_active_project($post_id) ? '✅' : '—';
+            $is_active = $this->is_active_project($post_id);
+            $style = $is_active
+                ? 'color:#155724;background:#d4edda;'
+                : 'color:#555;background:#e2e3e5;';
+            echo '<span class="nms-project-status nms-project-status--' . ($is_active ? 'active' : 'passive')
+                . '" style="display:inline-block;padding:2px 8px;border-radius:3px;font-weight:600;' . $style . '">'
+                . esc_html($is_active ? 'Active' : 'Passive')
+                . '</span>';
         }
     }
 
