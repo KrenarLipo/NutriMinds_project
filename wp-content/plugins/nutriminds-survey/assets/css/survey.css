@@ -169,17 +169,26 @@
 }
 
 .nms-button--primary {
-    background: var(--ns-accent-2);
+    background: var(--ns-border);
+    color: var(--ns-muted);
+    transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.nms-button--primary.is-ready {
+    background: #2f9c6e;
     color: var(--ns-white);
 }
 
-.nms-button--primary:hover {
-    background: var(--ns-accent);
+.nms-button--primary.is-ready:hover {
+    background: #268058;
+}
+
+.nms-button--primary.is-ready:active {
+    transform: translateY(1px);
 }
 
 .nms-button:disabled {
     cursor: not-allowed;
-    opacity: 0.6;
 }
 
 .nms-survey__notice {

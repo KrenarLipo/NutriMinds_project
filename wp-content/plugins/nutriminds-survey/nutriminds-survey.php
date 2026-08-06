@@ -29,6 +29,7 @@ final class NutriMinds_Survey {
     private const DEFAULT_PROJECT_END_DATE = '2026-08-28';
     private const GENDER_OPTIONS = ['female', 'male'];
     private const ADMIN_CONTACT_EMAIL = 'klipo90@gmail.com';
+    private const PRIVACY_POLICY_OPTION = 'nms_privacy_policy_url';
 
     private array $translations = [];
     private ?string $current_language = null;
@@ -44,6 +45,7 @@ final class NutriMinds_Survey {
         add_action('admin_init', [$this, 'ensure_manage_capability_granted']);
         add_action('admin_init', [self::class, 'ensure_default_project_seeded']);
         add_action('admin_post_nms_export_registrations', [$this, 'handle_export_registrations']);
+        add_action('admin_post_nms_save_privacy_policy', [$this, 'handle_save_privacy_policy']);
         add_action('add_meta_boxes', [$this, 'register_project_meta_box']);
         add_action('save_post_' . self::POST_TYPE_PROJECT, [$this, 'save_project_meta_box'], 10, 2);
         add_filter('manage_' . self::POST_TYPE_REGISTRATION . '_posts_columns', [$this, 'filter_registration_columns']);
@@ -193,12 +195,77 @@ final class NutriMinds_Survey {
 
         add_submenu_page(
             'edit.php?post_type=' . self::POST_TYPE_REGISTRATION,
+            'Privacy Policy',
+            'Privacy Policy',
+            self::MANAGE_CAPABILITY,
+            'nms_privacy_policy',
+            [$this, 'render_privacy_policy_page']
+        );
+
+        add_submenu_page(
+            'edit.php?post_type=' . self::POST_TYPE_REGISTRATION,
             'Help',
             'Help',
             self::MANAGE_CAPABILITY,
             'nms_help',
             [$this, 'render_help_page']
         );
+    }
+
+    private function get_privacy_policy_url(): string {
+        $url = (string) get_option(self::PRIVACY_POLICY_OPTION, '');
+
+        return $url !== '' ? $url : '#';
+    }
+
+    public function render_privacy_policy_page(): void {
+        if (!current_user_can(self::MANAGE_CAPABILITY)) {
+            return;
+        }
+
+        $current_url = (string) get_option(self::PRIVACY_POLICY_OPTION, '');
+        ?>
+        <div class="wrap">
+            <h1>Privacy Policy Link</h1>
+            <?php if (isset($_GET['updated'])) : ?>
+                <div class="notice notice-success is-dismissible"><p>Privacy policy link saved.</p></div>
+            <?php endif; ?>
+            <p>This is the link shown next to the consent checkbox on the registration form (<em>"in line with the privacy policy"</em>). Until you set it below, that link points to <code>#</code> instead of a real page.</p>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <input type="hidden" name="action" value="nms_save_privacy_policy">
+                <?php wp_nonce_field('nms_privacy_policy'); ?>
+                <table class="form-table" role="presentation">
+                    <tbody>
+                        <tr>
+                            <th scope="row"><label for="nms_privacy_policy_url">Privacy policy URL</label></th>
+                            <td>
+                                <input type="url" id="nms_privacy_policy_url" name="privacy_policy_url" class="regular-text" value="<?php echo esc_attr($current_url); ?>" placeholder="https://example.com/privacy-policy">
+                                <p class="description">Leave blank to fall back to <code>#</code>.</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="submit"><button type="submit" class="button button-primary">Save</button></p>
+            </form>
+        </div>
+        <?php
+    }
+
+    public function handle_save_privacy_policy(): void {
+        if (!current_user_can(self::MANAGE_CAPABILITY)) {
+            wp_die(esc_html__('You are not allowed to change this setting.', 'nutriminds-survey'), '', ['response' => 403]);
+        }
+
+        check_admin_referer('nms_privacy_policy');
+
+        $url = esc_url_raw((string) wp_unslash($_POST['privacy_policy_url'] ?? ''));
+        update_option(self::PRIVACY_POLICY_OPTION, $url, false);
+
+        wp_safe_redirect(add_query_arg([
+            'page' => 'nms_privacy_policy',
+            'updated' => '1',
+        ], admin_url('admin.php')));
+        exit;
     }
 
     public function render_help_page(): void {
@@ -518,15 +585,10 @@ final class NutriMinds_Survey {
     }
 
     private function get_consent_label(): string {
-        $privacy_url = function_exists('get_privacy_policy_url') ? get_privacy_policy_url() : '';
         $label = $this->t('field.consent');
 
-        if ($privacy_url === '') {
-            return $label;
-        }
-
         return strtr($label, [
-            '{privacy_policy_link}' => '<a href="' . esc_url($privacy_url) . '" target="_blank" rel="noopener noreferrer">' . esc_html($this->t('field.consentLinkText')) . '</a>',
+            '{privacy_policy_link}' => '<a href="' . esc_url($this->get_privacy_policy_url()) . '" target="_blank" rel="noopener noreferrer">' . esc_html($this->t('field.consentLinkText')) . '</a>',
         ]);
     }
 

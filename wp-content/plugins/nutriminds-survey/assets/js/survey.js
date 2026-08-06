@@ -140,6 +140,18 @@
             return true;
         }
 
+        function isFormReady() {
+            const fields = Array.from(form.querySelectorAll('input[required], select[required]'));
+
+            return fields.every((field) => validationMessage(field) === '');
+        }
+
+        function updateSubmitState() {
+            const ready = isFormReady();
+            submitButton.disabled = !ready;
+            submitButton.classList.toggle('is-ready', ready);
+        }
+
         function setNotice(message, type) {
             if (!notice) {
                 return;
@@ -162,18 +174,23 @@
         form.addEventListener('input', (event) => {
             if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
                 clearFieldError(event.target);
+                updateSubmitState();
             }
         });
         form.addEventListener('change', (event) => {
             if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
                 validateField(event.target);
+                updateSubmitState();
             }
         });
         form.addEventListener('blur', (event) => {
             if ((event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) && event.target.required) {
                 validateField(event.target);
+                updateSubmitState();
             }
         }, true);
+
+        updateSubmitState();
 
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -204,7 +221,7 @@
                 });
                 submitButton.remove();
             } catch (error) {
-                submitButton.disabled = false;
+                updateSubmitState();
                 submitButton.textContent = label('button.submit', 'Register');
                 setNotice(error.message || label('js.submitError', 'Submission failed. Please try again.'), 'error');
             }
