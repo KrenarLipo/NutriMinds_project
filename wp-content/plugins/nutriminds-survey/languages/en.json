@@ -1,6 +1,6 @@
 {
-  "form.title": "Join a NutriMinds Project",
-  "form.intro": "Register your details once, and we'll be in touch about the projects you're eligible for — starting with the Nutrimind Gut Health Test.",
+  "form.title": "Join a Nutriminds Project",
+  "form.intro": "Register your details once, and we'll be in touch about the projects you're eligible for — starting with the Nutriminds Gut Health Test.",
   "form.noProjects": "There are no projects open for registration right now. Please check back soon.",
   "field.firstName": "First name",
   "field.lastName": "Last name",
@@ -11,7 +11,7 @@
   "field.email": "Email address",
   "field.project": "Which project are you registering for?",
   "field.projectSelect": "Select a project...",
-  "field.consent": "I agree that NutriMinds may store my details for this project and contact me about future related collaborations, in line with the {privacy_policy_link}.",
+  "field.consent": "I agree that Nutriminds may store my details for this project and contact me about future related collaborations, in line with the {privacy_policy_link}.",
   "field.consentLinkText": "privacy policy",
   "gender.female": "Female",
   "gender.male": "Male",

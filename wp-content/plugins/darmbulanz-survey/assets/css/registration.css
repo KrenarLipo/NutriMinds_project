@@ -1,0 +1,285 @@
+.db-survey {
+    --db-yellow: #fce800;
+    --db-navy: #112033;
+    --db-blue: #004e80;
+    --db-maroon: #780000;
+    --db-gold: #d7c360;
+    --db-gray-sub: #7f7f7f;
+    --db-error: #ff0000;
+    --db-white: #ffffff;
+    --db-border: #112033;
+    --db-field-radius: 15px;
+    --db-button-radius: 15px;
+    color: var(--db-navy);
+    font-family: 'Inter', Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+}
+
+.db-survey__shell {
+    background: var(--db-white);
+    border: 1px solid #e0e0e0;
+    border-radius: 18px;
+    box-shadow: 0 12px 32px rgba(17, 32, 51, 0.08);
+    margin: 0 auto;
+    max-width: 760px;
+    padding: 0 0 36px;
+    overflow: hidden;
+}
+
+.db-survey__header {
+    align-items: flex-start;
+    background: var(--db-yellow);
+    color: var(--db-navy);
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+    padding: 24px 32px;
+}
+
+.db-survey__header h1 {
+    font-family: Futura, Helvetica, Arial, sans-serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+}
+
+.db-survey__header p {
+    color: var(--db-navy);
+    margin: 0;
+    max-width: 56ch;
+    font-size: 0.92rem;
+}
+
+.db-survey__help-note {
+    color: var(--db-gray-sub);
+    font-size: 0.85rem;
+    margin: 18px 32px 0;
+}
+
+.db-language-switcher {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.db-language-switcher__link {
+    border: 1px solid var(--db-navy);
+    border-radius: 999px;
+    display: inline-flex;
+    padding: 6px 10px;
+    text-decoration: none;
+    opacity: 0.55;
+}
+
+.db-language-switcher__link.is-active {
+    background: var(--db-white);
+    opacity: 1;
+}
+
+.db-survey__form {
+    padding: 0 32px;
+}
+
+.db-section {
+    border-top: 1px solid #eceff3;
+    margin-top: 26px;
+    padding-top: 22px;
+}
+
+.db-section:first-of-type {
+    border-top: none;
+    margin-top: 18px;
+    padding-top: 0;
+}
+
+.db-section h2 {
+    font-family: Futura, Helvetica, Arial, sans-serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--db-maroon);
+    margin: 0 0 16px;
+}
+
+.db-grid {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.db-grid--two {
+    grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 640px) {
+    .db-grid--two {
+        grid-template-columns: 1fr;
+    }
+
+    .db-survey__shell {
+        border-radius: 12px;
+    }
+
+    .db-survey__header {
+        padding: 20px 22px;
+    }
+
+    .db-survey__form {
+        padding: 0 22px;
+    }
+
+    .db-survey__help-note {
+        margin-left: 22px;
+        margin-right: 22px;
+    }
+}
+
+.db-survey label {
+    display: block;
+    font-weight: 600;
+}
+
+.db-field--full {
+    display: block;
+    margin-bottom: 16px;
+}
+
+.db-survey label span {
+    display: block;
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+    color: var(--db-navy);
+}
+
+.db-survey input[type="text"],
+.db-survey input[type="date"],
+.db-survey input[type="tel"],
+.db-survey input[type="email"],
+.db-survey input[type="url"],
+.db-survey input[type="file"],
+.db-survey select,
+.db-survey textarea {
+    background: var(--db-white);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-field-radius);
+    box-sizing: border-box;
+    color: var(--db-navy);
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 11px 14px;
+    width: 100%;
+}
+
+.db-survey textarea {
+    border-radius: 18px;
+    resize: vertical;
+}
+
+.db-survey input:focus,
+.db-survey select:focus,
+.db-survey textarea:focus {
+    border-color: var(--db-blue);
+    box-shadow: 0 0 0 3px rgba(0, 78, 128, 0.18);
+    outline: none;
+}
+
+.db-survey input[aria-invalid="true"],
+.db-survey select[aria-invalid="true"] {
+    border-color: var(--db-error);
+    box-shadow: 0 0 0 3px rgba(255, 0, 0, 0.12);
+}
+
+.db-check {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    font-weight: 400;
+    margin-bottom: 14px;
+}
+
+.db-check input {
+    flex-shrink: 0;
+    height: 18px;
+    width: 18px;
+}
+
+.db-check span {
+    font-size: 0.9rem;
+    color: var(--db-navy);
+}
+
+.db-check a {
+    color: var(--db-blue);
+}
+
+.db-field-error {
+    color: var(--db-error);
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-top: 6px;
+}
+
+.db-field-hint {
+    color: var(--db-gray-sub);
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 400;
+    margin-top: 6px;
+}
+
+.db-button {
+    border: none;
+    border-radius: var(--db-button-radius);
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+    padding: 13px 28px;
+}
+
+.db-button--primary {
+    background: #c2c2c2;
+    color: var(--db-white);
+    transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.db-button--primary.is-ready {
+    background: var(--db-blue);
+}
+
+.db-button--primary.is-ready:hover {
+    background: #003a61;
+}
+
+.db-button--primary.is-ready:active {
+    transform: translateY(1px);
+}
+
+.db-button:disabled {
+    cursor: not-allowed;
+}
+
+.db-survey__notice {
+    border-radius: 12px;
+    font-weight: 600;
+    margin: 20px 32px 0;
+    padding: 12px 16px;
+}
+
+.db-survey__notice.is-success {
+    background: #eaf4f1;
+    color: #2f6a5a;
+}
+
+.db-survey__notice.is-error {
+    background: #fdeceb;
+    color: var(--db-error);
+}
+
+.db-hp-field {
+    height: 1px;
+    left: -9999px;
+    overflow: hidden;
+    position: absolute;
+    top: -9999px;
+    width: 1px;
+}

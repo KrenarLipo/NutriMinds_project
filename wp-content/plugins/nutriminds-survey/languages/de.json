@@ -1,6 +1,6 @@
 {
-  "form.title": "Bei einem NutriMinds-Projekt anmelden",
-  "form.intro": "Registrieren Sie Ihre Daten einmalig, und wir melden uns bezüglich der Projekte, für die Sie infrage kommen — zunächst für den Nutrimind Gut Health Test.",
+  "form.title": "Bei einem Nutriminds-Projekt anmelden",
+  "form.intro": "Registrieren Sie Ihre Daten einmalig, und wir melden uns bezüglich der Projekte, für die Sie infrage kommen — zunächst für den Nutriminds Gut Health Test.",
   "form.noProjects": "Derzeit sind keine Projekte zur Anmeldung geöffnet. Bitte schauen Sie bald wieder vorbei.",
   "field.firstName": "Vorname",
   "field.lastName": "Nachname",
@@ -11,7 +11,7 @@
   "field.email": "E-Mail-Adresse",
   "field.project": "Für welches Projekt möchten Sie sich anmelden?",
   "field.projectSelect": "Projekt auswählen...",
-  "field.consent": "Ich bin damit einverstanden, dass NutriMinds meine Daten für dieses Projekt speichert und mich zu zukünftigen verwandten Kooperationen kontaktiert, gemäß der {privacy_policy_link}.",
+  "field.consent": "Ich bin damit einverstanden, dass Nutriminds meine Daten für dieses Projekt speichert und mich zu zukünftigen verwandten Kooperationen kontaktiert, gemäß der {privacy_policy_link}.",
   "field.consentLinkText": "Datenschutzerklärung",
   "gender.female": "Weiblich",
   "gender.male": "Männlich",

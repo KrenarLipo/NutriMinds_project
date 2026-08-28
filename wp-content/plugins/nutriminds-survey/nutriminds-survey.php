@@ -430,6 +430,15 @@ final class NutriMinds_Survey {
     }
 
     public function capture_language_choice(): void {
+        // Tell any page-caching layer (host-level cache, CDN, caching plugin) that
+        // the response depends on this cookie. Without this, a cache that isn't
+        // cookie-aware can serve a stale, wrong-language response right after a
+        // visitor switches language — the page briefly shows the new language
+        // (uncached, fresh render) and then reverts on the next request.
+        if (!headers_sent()) {
+            header('Vary: Cookie', false);
+        }
+
         $requested_language = isset($_GET['nms_lang']) ? sanitize_key((string) $_GET['nms_lang']) : '';
 
         if (!$this->is_supported_language($requested_language)) {
@@ -449,6 +458,11 @@ final class NutriMinds_Survey {
             ]
         );
         $_COOKIE[self::LANGUAGE_COOKIE] = $requested_language;
+
+        // This specific response (the one that just switched the cookie) must
+        // never be cached and re-served to a later visitor with a different
+        // language preference.
+        nocache_headers();
     }
 
     private function is_supported_language(string $language): bool {
