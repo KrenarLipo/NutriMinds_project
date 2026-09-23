@@ -1,3 +1,39 @@
+/* Self-hosted on darmbulanz.net (same declarations as the live site's theme).
+   Loading it cross-origin from another domain will fail in Firefox, since
+   these files aren't served with an Access-Control-Allow-Origin header —
+   not a concern once this plugin runs on darmbulanz.net itself. */
+@font-face {
+    font-family: 'Futura';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('https://darmbulanz.net/wp-content/uploads/2026/06/Futura-Medium.otf') format('OpenType');
+}
+
+@font-face {
+    font-family: 'Futura';
+    font-style: italic;
+    font-weight: 500;
+    font-display: swap;
+    src: url('https://darmbulanz.net/wp-content/uploads/2026/06/Futura-Medium-Italic.otf') format('OpenType');
+}
+
+@font-face {
+    font-family: 'Futura';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('https://darmbulanz.net/wp-content/uploads/2026/06/Futura-Bold.otf') format('OpenType');
+}
+
+@font-face {
+    font-family: 'Futura';
+    font-style: italic;
+    font-weight: 500;
+    font-display: swap;
+    src: url('https://darmbulanz.net/wp-content/uploads/2026/06/Futura-Bold-Italic.otf') format('OpenType');
+}
+
 .db-survey {
     --db-yellow: #fce800;
     --db-navy: #112033;
@@ -11,7 +47,7 @@
     --db-field-radius: 15px;
     --db-button-radius: 15px;
     color: var(--db-navy);
-    font-family: 'Inter', Helvetica, Arial, sans-serif;
+    font-family: Futura, Helvetica, Arial, sans-serif;
     line-height: 1.5;
 }
 
@@ -29,25 +65,33 @@
 .db-survey__header {
     align-items: flex-start;
     background: var(--db-yellow);
-    color: var(--db-navy);
+    color: var(--db-blue);
     display: flex;
-    gap: 16px;
+    flex-wrap: wrap;
+    gap: 12px 16px;
     justify-content: space-between;
     padding: 24px 32px;
 }
 
+.db-survey__header-text {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+
 .db-survey__header h1 {
-    font-family: Futura, Helvetica, Arial, sans-serif;
+    color: var(--db-blue);
     font-size: 1.5rem;
     font-weight: 700;
     margin: 0 0 8px;
+    overflow-wrap: break-word;
 }
 
 .db-survey__header p {
-    color: var(--db-navy);
+    color: var(--db-blue);
     margin: 0;
     max-width: 56ch;
     font-size: 0.92rem;
+    overflow-wrap: break-word;
 }
 
 .db-survey__help-note {
@@ -58,17 +102,29 @@
 
 .db-language-switcher {
     display: flex;
-    gap: 8px;
     flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-left: auto;
 }
 
 .db-language-switcher__link {
-    border: 1px solid var(--db-navy);
+    border: 1px solid var(--db-blue);
     border-radius: 999px;
     display: inline-flex;
     padding: 6px 10px;
     text-decoration: none;
     opacity: 0.55;
+}
+
+.db-language-switcher__flag {
+    display: flex;
+    line-height: 0;
+}
+
+.db-language-switcher__flag svg {
+    border-radius: 2px;
+    display: block;
 }
 
 .db-language-switcher__link.is-active {
@@ -93,10 +149,9 @@
 }
 
 .db-section h2 {
-    font-family: Futura, Helvetica, Arial, sans-serif;
     font-size: 1.05rem;
     font-weight: 700;
-    color: var(--db-maroon);
+    color: var(--db-navy);
     margin: 0 0 16px;
 }
 
@@ -237,20 +292,17 @@
 }
 
 .db-button--primary {
-    background: #c2c2c2;
-    color: var(--db-white);
+    background: #004e80;
+    color: #fbfbfd;
     transition: background-color 0.15s ease, transform 0.1s ease;
 }
 
-.db-button--primary.is-ready {
-    background: var(--db-blue);
+.db-button--primary:hover {
+    background: #006ba1;
+    color: #fbfbfd;
 }
 
-.db-button--primary.is-ready:hover {
-    background: #003a61;
-}
-
-.db-button--primary.is-ready:active {
+.db-button--primary:active {
     transform: translateY(1px);
 }
 

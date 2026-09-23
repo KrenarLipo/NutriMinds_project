@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
 <section class="db-survey" data-db-survey>
     <div class="db-survey__shell">
         <header class="db-survey__header">
-            <div>
+            <div class="db-survey__header-text">
                 <h1><?php echo esc_html($this->t('form.title')); ?></h1>
                 <p><?php echo esc_html($this->t('form.intro')); ?></p>
             </div>
@@ -160,6 +160,7 @@ if (!defined('ABSPATH')) {
                     <span><?php echo esc_html($this->t('field.focusAreas')); ?></span>
                     <textarea name="focus_areas" rows="2"></textarea>
                 </label>
+                <h2><?php echo esc_html($this->t('section.interest.subtitle')); ?></h2>
                 <div class="db-grid db-grid--two">
                     <label class="db-check">
                         <input type="checkbox" name="interest_referral">

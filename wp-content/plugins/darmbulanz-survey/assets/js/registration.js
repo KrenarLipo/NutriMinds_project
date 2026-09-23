@@ -203,9 +203,7 @@
         }
 
         function updateSubmitState() {
-            const ready = isFormReady();
-            submitButton.disabled = !ready;
-            submitButton.classList.toggle('is-ready', ready);
+            submitButton.disabled = !isFormReady();
         }
 
         function setNotice(message, type) {

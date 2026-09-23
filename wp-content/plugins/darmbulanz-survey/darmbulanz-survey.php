@@ -394,6 +394,8 @@ final class Darmbulanz_Survey {
         add_action('add_meta_boxes', [$this, 'register_application_meta_boxes']);
         add_filter('manage_' . self::POST_TYPE . '_posts_columns', [$this, 'filter_application_columns']);
         add_action('manage_' . self::POST_TYPE . '_posts_custom_column', [$this, 'render_application_column'], 10, 2);
+        add_action('admin_enqueue_scripts', [$this, 'register_admin_notification_assets']);
+        add_action('wp_ajax_db_check_new_applications', [$this, 'handle_check_new_applications']);
     }
 
     public static function activate(): void {
@@ -411,6 +413,15 @@ final class Darmbulanz_Survey {
     }
 
     public function capture_language_choice(): void {
+        // Tell any page-caching layer (host-level cache, CDN, caching plugin) that
+        // the response depends on this cookie. Without this, a cache that isn't
+        // cookie-aware can serve a stale, wrong-language response right after a
+        // visitor switches language — the page briefly shows the new language
+        // (uncached, fresh render) and then reverts on the next request.
+        if (!headers_sent()) {
+            header('Vary: Cookie', false);
+        }
+
         $requested_language = isset($_GET['db_lang']) ? sanitize_key((string) $_GET['db_lang']) : '';
 
         if (!$this->is_supported_language($requested_language)) {
@@ -430,6 +441,11 @@ final class Darmbulanz_Survey {
             ]
         );
         $_COOKIE[self::LANGUAGE_COOKIE] = $requested_language;
+
+        // This specific response (the one that just switched the cookie) must
+        // never be cached and re-served to a later visitor with a different
+        // language preference.
+        nocache_headers();
     }
 
     private function is_supported_language(string $language): bool {
@@ -508,22 +524,47 @@ final class Darmbulanz_Survey {
         return $translations[$key] ?? $this->get_translations(self::DEFAULT_LANGUAGE)[$key] ?? $key;
     }
 
+    /**
+     * Inline SVG flags instead of Unicode flag emoji: regional-indicator flag
+     * emoji don't render as flags on Windows (shows "DE"/"GB" letter tiles) or
+     * on a lot of Android browsers/keyboards — exactly the "sometimes not
+     * visible, mostly on mobile" symptom. An inline SVG renders identically
+     * everywhere and needs no emoji font support at all.
+     */
+    private function get_language_flag_svg(string $language): string {
+        if ($language === 'de') {
+            return '<svg width="20" height="14" viewBox="0 0 20 14" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">'
+                . '<rect width="20" height="14" fill="#000000"/>'
+                . '<rect y="4.67" width="20" height="9.33" fill="#DD0000"/>'
+                . '<rect y="9.33" width="20" height="4.67" fill="#FFCE00"/>'
+                . '</svg>';
+        }
+
+        return '<svg width="20" height="14" viewBox="0 0 60 42" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">'
+            . '<rect width="60" height="42" fill="#012169"/>'
+            . '<path d="M0,0 L60,42 M60,0 L0,42" stroke="#FFFFFF" stroke-width="8"/>'
+            . '<path d="M0,0 L60,42 M60,0 L0,42" stroke="#C8102E" stroke-width="4"/>'
+            . '<path d="M30,0 V42 M0,21 H60" stroke="#FFFFFF" stroke-width="14"/>'
+            . '<path d="M30,0 V42 M0,21 H60" stroke="#C8102E" stroke-width="8"/>'
+            . '</svg>';
+    }
+
     private function render_language_switcher(): string {
         $current_language = $this->get_current_language();
         $languages = [
-            'de' => ['flag' => '🇩🇪', 'label' => 'Deutsch'],
-            'en' => ['flag' => '🇬🇧', 'label' => 'English'],
+            'de' => ['label' => 'Deutsch'],
+            'en' => ['label' => 'English'],
         ];
 
         $items = '';
         foreach ($languages as $language => $meta) {
             $items .= sprintf(
-                '<a class="db-language-switcher__link %s" href="%s" aria-label="%s" title="%s"><span aria-hidden="true">%s</span><span class="screen-reader-text">%s</span></a>',
+                '<a class="db-language-switcher__link %s" href="%s" aria-label="%s" title="%s"><span class="db-language-switcher__flag" aria-hidden="true">%s</span><span class="screen-reader-text">%s</span></a>',
                 $current_language === $language ? 'is-active' : '',
                 esc_url(add_query_arg('db_lang', $language)),
                 esc_attr($meta['label']),
                 esc_attr($meta['label']),
-                esc_html($meta['flag']),
+                $this->get_language_flag_svg($language),
                 esc_html($meta['label'])
             );
         }
@@ -564,16 +605,9 @@ final class Darmbulanz_Survey {
         $base_url = plugin_dir_url(__FILE__);
 
         wp_enqueue_style(
-            'darmbulanz-inter-font',
-            'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
-            [],
-            null
-        );
-
-        wp_enqueue_style(
             'darmbulanz-survey',
             $base_url . 'assets/css/registration.css',
-            ['darmbulanz-inter-font'],
+            [],
             self::VERSION
         );
 
@@ -846,7 +880,33 @@ final class Darmbulanz_Survey {
             update_post_meta((int) $post_id, self::META_PREFIX . 'resubmitted_after_rejection', '1');
         }
 
+        $this->send_admin_new_application_notification((int) $post_id);
+
         wp_send_json_success(['message' => $this->t('ajax.success')]);
+    }
+
+    private function send_admin_new_application_notification(int $post_id): void {
+        $recipient = sanitize_email((string) get_option('admin_email'));
+        if (!is_email($recipient)) {
+            return;
+        }
+
+        $fields = $this->get_application_fields($post_id);
+        $name = trim($fields['first_name'] . ' ' . $fields['last_name']);
+        $category_label = self::MAIN_CATEGORIES_EN[$fields['main_category']] ?? $fields['main_category'];
+        $specialty_label = self::SPECIALTIES_BY_CATEGORY_EN[$fields['main_category']][$fields['specialty']] ?? $fields['specialty'];
+        $review_url = admin_url('admin.php?page=darmbulanz-survey&status=pending');
+
+        $subject = 'New Darmbulanz registration awaiting review: ' . ($name !== '' ? $name : $fields['email']);
+        $body = "A new Darmbulanz professional registration is waiting for your decision.\n\n"
+            . "Name: {$name}\n"
+            . "Email: {$fields['email']}\n"
+            . "Category: {$category_label}\n"
+            . "Specialty: {$specialty_label}\n"
+            . "Institution: {$fields['institution']}\n\n"
+            . "Review and approve or reject it here:\n{$review_url}";
+
+        wp_mail($recipient, $subject, $body, ['Content-Type: text/plain; charset=UTF-8']);
     }
 
     /**
@@ -968,9 +1028,12 @@ final class Darmbulanz_Survey {
     }
 
     public function register_admin_menu(): void {
+        $pending_count = $this->application_count('pending');
+        $badge = $this->render_pending_count_badge($pending_count);
+
         add_menu_page(
             'Darmbulanz Survey',
-            'Darmbulanz Survey',
+            'Darmbulanz Survey' . $badge,
             self::MANAGE_CAPABILITY,
             'darmbulanz-survey',
             [$this, 'render_admin_applications_page'],
@@ -981,7 +1044,7 @@ final class Darmbulanz_Survey {
         add_submenu_page(
             'darmbulanz-survey',
             'Applications',
-            'Applications',
+            'Applications' . $badge,
             self::MANAGE_CAPABILITY,
             'darmbulanz-survey',
             [$this, 'render_admin_applications_page']
@@ -1176,6 +1239,98 @@ final class Darmbulanz_Survey {
         return (int) $query->found_posts;
     }
 
+    private function render_pending_count_badge(int $count): string {
+        if ($count < 1) {
+            return '';
+        }
+
+        return sprintf(
+            ' <span class="awaiting-mod count-%1$d"><span class="pending-count">%1$d</span></span>',
+            $count
+        );
+    }
+
+    private function get_latest_pending_application(): array {
+        $query = new WP_Query([
+            'post_type' => self::POST_TYPE,
+            'post_status' => 'publish',
+            'posts_per_page' => 1,
+            'orderby' => 'date',
+            'order' => 'DESC',
+            'fields' => 'ids',
+            'meta_query' => [
+                ['key' => self::META_STATUS, 'value' => 'pending'],
+            ],
+        ]);
+
+        $ids = $query->posts;
+        if (!is_array($ids) || !isset($ids[0])) {
+            return ['id' => 0, 'name' => ''];
+        }
+
+        $post_id = (int) $ids[0];
+        $fields = $this->get_application_fields($post_id);
+        $name = trim($fields['first_name'] . ' ' . $fields['last_name']);
+
+        return ['id' => $post_id, 'name' => $name !== '' ? $name : $fields['email']];
+    }
+
+    public function register_admin_notification_assets(): void {
+        if (!current_user_can(self::MANAGE_CAPABILITY)) {
+            return;
+        }
+
+        $base_url = plugin_dir_url(__FILE__);
+
+        wp_enqueue_style(
+            'darmbulanz-admin-notifications',
+            $base_url . 'assets/css/admin-notifications.css',
+            [],
+            self::VERSION
+        );
+
+        wp_enqueue_script(
+            'darmbulanz-admin-notifications',
+            $base_url . 'assets/js/admin-notifications.js',
+            [],
+            self::VERSION,
+            true
+        );
+
+        $latest = $this->get_latest_pending_application();
+
+        wp_localize_script(
+            'darmbulanz-admin-notifications',
+            'DarmbulanzAdminNotifications',
+            [
+                'ajaxUrl' => admin_url('admin-ajax.php'),
+                'action' => 'db_check_new_applications',
+                'nonce' => wp_create_nonce('db_admin_notifications'),
+                'pollIntervalMs' => 15000,
+                'initialLatestId' => $latest['id'],
+                'applicationsUrl' => admin_url('admin.php?page=darmbulanz-survey'),
+            ]
+        );
+    }
+
+    public function handle_check_new_applications(): void {
+        if (!current_user_can(self::MANAGE_CAPABILITY)) {
+            wp_send_json_error(['message' => 'Not allowed.'], 403);
+        }
+
+        if (!check_ajax_referer('db_admin_notifications', 'nonce', false)) {
+            wp_send_json_error(['message' => 'Invalid request.'], 403);
+        }
+
+        $latest = $this->get_latest_pending_application();
+
+        wp_send_json_success([
+            'pendingCount' => $this->application_count('pending'),
+            'latestId' => $latest['id'],
+            'latestName' => $latest['name'],
+        ]);
+    }
+
     private function render_admin_application_row(int $post_id): void {
         $fields = $this->get_application_fields($post_id);
         $status = $this->get_application_status($post_id);
@@ -1269,11 +1424,12 @@ final class Darmbulanz_Survey {
         }
 
         $language = $this->is_supported_language($fields['language']) ? $fields['language'] : self::DEFAULT_LANGUAGE;
-        $site_name = wp_specialchars_decode((string) get_bloginfo('name'), ENT_QUOTES);
         $name = trim($fields['first_name'] . ' ' . $fields['last_name']);
         $replacements = [
             '{name}' => $name !== '' ? $name : $this->t_for_language('email.rejection.defaultName', $language),
-            '{site}' => $site_name !== '' ? $site_name : 'Darmbulanz',
+            // Hardcoded rather than pulled from get_bloginfo('name'): this plugin is
+            // always Darmbulanz-branded regardless of the underlying site's title.
+            '{site}' => 'Darmbulanz',
         ];
         $subject = strtr($this->t_for_language('email.rejection.subject', $language), $replacements);
         $body = strtr($this->t_for_language('email.rejection.body', $language), $replacements);
@@ -1563,13 +1719,13 @@ final class Darmbulanz_Survey {
         echo '<div class="wrap db-admin">';
         echo '<h1>Darmbulanz Platform Settings</h1>';
         $this->render_platform_settings_notice();
-        echo '<p>Configure this once you have the integration details for <strong>social.darmbulanz.net</strong> (endpoint URL and API token) from the Darmbulanz team. Approved applications are sent there automatically while this is enabled.</p>';
+        echo '<p>Approved applications are sent to <strong>social.darmbulanz.net</strong>\'s Ocelot <code>Signup</code> GraphQL mutation (same integration pattern as the NutriMinds specialist verification plugin, since both run on the same platform). Configure the endpoint and API token from the Darmbulanz team here.</p>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
         echo '<input type="hidden" name="action" value="db_save_platform_settings">';
         wp_nonce_field('db_platform_settings');
         echo '<table class="form-table" role="presentation"><tbody>';
         echo '<tr><th scope="row">Enable integration</th><td><label><input type="checkbox" name="platform_enabled" value="1" ' . checked($settings['enabled'], '1', false) . '> Send approved applications to social.darmbulanz.net</label></td></tr>';
-        echo '<tr><th scope="row"><label for="platform_endpoint">API endpoint</label></th><td><input type="url" id="platform_endpoint" name="platform_endpoint" class="regular-text" value="' . esc_attr($settings['endpoint']) . '" placeholder="https://social.darmbulanz.net/api/..."></td></tr>';
+        echo '<tr><th scope="row"><label for="platform_endpoint">GraphQL endpoint</label></th><td><input type="url" id="platform_endpoint" name="platform_endpoint" class="regular-text" value="' . esc_attr($settings['endpoint']) . '" placeholder="https://social.darmbulanz.net/api"></td></tr>';
         echo '<tr><th scope="row"><label for="platform_token">API token</label></th><td>';
         echo '<input type="password" id="platform_token" name="platform_token" class="regular-text" value="" autocomplete="new-password" placeholder="' . esc_attr($has_token ? 'Leave blank to keep the saved token' : 'Paste the platform API token') . '">';
         echo '<p class="description">' . esc_html($has_token ? 'A token is configured from ' . $token_source . '. It is never displayed here.' : 'No token is configured yet.') . '</p>';
@@ -1650,20 +1806,20 @@ final class Darmbulanz_Survey {
             return 'failed';
         }
 
-        // NOTE: payload shape is a reasonable placeholder until the real
-        // social.darmbulanz.net API contract is confirmed by the Darmbulanz team.
-        $payload = [
+        // social.darmbulanz.net runs the same Ocelot Social platform as
+        // os.nutriminds.net (same "social.<brand>.net" pattern), so this uses
+        // the same Signup mutation contract as the NutriMinds specialist
+        // verification plugin's platform integration — minus inviteCode,
+        // which Darmbulanz's signup flow doesn't use.
+        $variables = [
             'email' => $fields['email'],
-            'firstName' => $fields['first_name'],
-            'lastName' => $fields['last_name'],
-            'mainCategory' => self::MAIN_CATEGORIES_EN[$fields['main_category']] ?? $fields['main_category'],
-            'specialty' => self::SPECIALTIES_BY_CATEGORY_EN[$fields['main_category']][$fields['specialty']] ?? $fields['specialty'],
-            'institution' => $fields['institution'],
-            'locale' => $this->is_supported_language($fields['language']) ? $fields['language'] : self::DEFAULT_LANGUAGE,
-            'externalReference' => 'darmbulanz-wp-' . $post_id,
+            'locale' => $this->normalize_platform_locale($fields['language']),
         ];
 
-        $result = $this->call_platform_api($settings['endpoint'], $token, $payload);
+        $result = $this->call_platform_graphql($settings['endpoint'], $token, [
+            'query' => 'mutation Signup($email: String!, $locale: String!) { Signup(email: $email, locale: $locale) { createdAt email verifiedAt } }',
+            'variables' => $variables,
+        ]);
 
         update_post_meta($post_id, self::META_PREFIX . 'platform_synced_at', current_time('mysql'));
         update_post_meta($post_id, self::META_PREFIX . 'platform_response', wp_json_encode($result['response'] ?? []));
@@ -1688,10 +1844,12 @@ final class Darmbulanz_Survey {
             ];
         }
 
-        return $this->call_platform_api($settings['endpoint'], $token, ['ping' => true]);
+        return $this->call_platform_graphql($settings['endpoint'], $token, [
+            'query' => 'query { __typename }',
+        ]);
     }
 
-    private function call_platform_api(string $endpoint, string $token, array $payload): array {
+    private function call_platform_graphql(string $endpoint, string $token, array $payload): array {
         $response = wp_remote_post($endpoint, [
             'timeout' => 20,
             'headers' => [
@@ -1722,11 +1880,30 @@ final class Darmbulanz_Survey {
             ];
         }
 
+        // A GraphQL API returns HTTP 200 even when the mutation itself failed
+        // server-side (e.g. invalid invite code) — the failure only shows up
+        // in this "errors" field. Missing this check was the actual root
+        // cause of "approve succeeds but the invite link doesn't work": we
+        // were reporting a failed Signup as a successful sync.
+        if (!empty($decoded['errors']) && is_array($decoded['errors'])) {
+            $first_error = $decoded['errors'][0]['message'] ?? 'The platform returned a GraphQL error.';
+
+            return [
+                'ok' => false,
+                'message' => (string) $first_error,
+                'response' => $decoded,
+            ];
+        }
+
         return [
             'ok' => true,
             'message' => 'Connection to the platform is working.',
             'response' => $decoded,
         ];
+    }
+
+    private function normalize_platform_locale(string $language): string {
+        return $this->is_supported_language($language) ? $language : self::DEFAULT_LANGUAGE;
     }
 
     private function set_platform_settings_notice(string $type, string $message): void {

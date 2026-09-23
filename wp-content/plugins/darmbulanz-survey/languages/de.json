@@ -1,14 +1,15 @@
 {
   "form.brand": "Darmbulanz",
-  "form.title": "Ich möchte dabei sein! Anmeldeformular für Fachkreise bei social.darmbulanz.net",
-  "form.intro": "Interdisziplinäres, kostenloses und industriefreies Netzwerk für Darmgesundheit – DACH-Region (Deutschland, Österreich, Schweiz).",
-  "form.helpNote": "Bitte alle Pflichtfelder ausfüllen. Felder mit * sind Pflichtfelder.",
+  "form.title": "Registrierung Darmbulanz Fachkreise",
+  "form.intro": "Netzwerk für Darmgesundheit in der DACH-Region (Deutschland, Österreich, Schweiz) - interdisziplinär, kostenlos und industriefrei.",
+  "form.helpNote": "Wir prüfen jede Registrierung innerhalb von zwei Werktagen. Pflichtfelder sind mit * markiert.",
   "form.noProjects": "Die Anmeldung ist derzeit nicht verfügbar. Bitte versuche es später erneut.",
   "section.personal.title": "1. Meine persönlichen Angaben",
   "section.professional.title": "2. Meine berufliche Einordnung",
-  "section.institution.title": "3. Meine Institution, meine Praxis oder ich bin Open-for-Work",
+  "section.institution.title": "3. Meine Institution, meine Praxis",
   "section.contact.title": "4. Mein Kontakt",
-  "section.interest.title": "5. Ich habe Interesse an einer Zusammenarbeit mit Darmbulanz",
+  "section.interest.title": "5. Meine Schwerpunkte und Interessen",
+  "section.interest.subtitle": "Zusammenarbeit mit Darmbulanz - Interesse an:",
   "section.consent.title": "6. Mein Einverständnis",
   "step.personal": "Persönliche Angaben",
   "step.professional": "Berufliche Einordnung",
@@ -72,6 +73,6 @@
   "ajax.emailApproved": "Diese E-Mail-Adresse ist bereits als Fachkreis-Mitglied bestätigt.",
   "ajax.emailPending": "Für diese E-Mail-Adresse liegt bereits eine Anmeldung zur Prüfung vor.",
   "email.rejection.subject": "Deine Anmeldung bei Darmbulanz",
-  "email.rejection.body": "Hallo {name},\n\nvielen Dank für dein Interesse an social.darmbulanz.net. Nach Prüfung deiner Angaben können wir deine Anmeldung derzeit leider nicht bestätigen.\n\nBei Fragen kannst du dich gerne bei uns melden.\n\nViele Grüße\nDas {site}-Team",
+  "email.rejection.body": "Hallo {name},\n\nvielen Dank für dein Interesse an social.darmbulanz.net und die Zeit, die du in deine Anmeldung investiert hast.\n\nNach sorgfältiger Prüfung deiner Angaben können wir deine Anmeldung derzeit leider noch nicht bestätigen — häufig liegt das schlicht an fehlenden oder unvollständigen Nachweisen.\n\nDu bist herzlich eingeladen, dich jederzeit erneut anzumelden, gerne mit ergänzenden Unterlagen. Bei Fragen sind wir gerne für dich da.\n\nViele Grüße\nDas {site}-Team",
   "email.rejection.defaultName": "liebe:r Interessent:in"
 }
