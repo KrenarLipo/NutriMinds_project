@@ -243,7 +243,7 @@
     box-shadow: 0 0 0 3px rgba(255, 0, 0, 0.12);
 }
 
-.db-check {
+.db-survey .db-check {
     align-items: center;
     display: flex;
     gap: 10px;
@@ -251,18 +251,20 @@
     margin-bottom: 14px;
 }
 
-.db-check input {
+.db-survey .db-check input {
     flex-shrink: 0;
     height: 18px;
     width: 18px;
 }
 
-.db-check span {
-    font-size: 0.9rem;
+.db-survey .db-check span {
     color: var(--db-navy);
+    display: inline;
+    font-size: 0.9rem;
+    margin-bottom: 0;
 }
 
-.db-check a {
+.db-survey .db-check a {
     color: var(--db-blue);
 }
 
