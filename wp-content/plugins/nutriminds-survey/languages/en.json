@@ -32,7 +32,7 @@
   "ajax.projectInvalid": "Please choose a valid project from the list.",
   "ajax.storageError": "The registration could not be stored. Please try again.",
   "ajax.rateLimited": "Too many submissions from this connection. Please try again in a while.",
-  "ajax.alreadyRegistered": "This email or phone number is already registered with us. If you'd like to be removed from our system, please email {admin_email}.",
+  "ajax.alreadyRegistered": "This email or phone number is already registered for this project. If you'd like to be removed from our system, please email {admin_email}.",
   "email.confirmation.subject": "You're registered for {project}",
   "email.confirmation.body": "Hi {name},\n\nThank you for registering for {project} with {site}. We've saved your details and will be in touch with next steps.\n\nIf you'd like to be removed from our system at any point, please email {admin_email}.\n\n{site}"
 }

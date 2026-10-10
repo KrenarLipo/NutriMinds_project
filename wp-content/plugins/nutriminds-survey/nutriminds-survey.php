@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NutriMinds Survey
  * Description: Public registration intake for NutriMinds research/collaboration projects (starting with the Nutrimind Gut Health Test), stored as a standing patient database.
- * Version: 1.1.0
+ * Version: 1.2.2
  * Requires at least: 6.0
  * Requires PHP: 8.2
  * Author: NutriMinds
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 
 final class NutriMinds_Survey {
     private const SHORTCODE = 'nutriminds_survey';
-    private const VERSION = '1.1.0';
+    private const VERSION = '1.2.2';
     private const DEFAULT_LANGUAGE = 'en';
     private const LANGUAGE_COOKIE = 'nms_lang';
     private const POST_TYPE_REGISTRATION = 'nms_registration';
@@ -28,8 +28,23 @@ final class NutriMinds_Survey {
     private const DEFAULT_PROJECT_TITLE = 'Nutrimind Gut Health Test';
     private const DEFAULT_PROJECT_END_DATE = '2026-08-28';
     private const GENDER_OPTIONS = ['female', 'male'];
-    private const ADMIN_CONTACT_EMAIL = 'klipo90@gmail.com';
+    private const ADMIN_CONTACT_EMAIL = 'am@alles.al';
     private const PRIVACY_POLICY_OPTION = 'nms_privacy_policy_url';
+    private const NOTIFICATION_RECIPIENTS_OPTION = 'nms_notification_recipients';
+    // Existing, working mailbox on the nutriminds.net domain; used as sender for every email.
+    private const MAIL_FROM = 'noreply@nutriminds.net';
+    private const MAIL_FROM_NAME = 'Nutriminds';
+    private const REST_NAMESPACE = 'nms/v1';
+    // Sites allowed to submit registrations through the REST endpoint. More can be
+    // added per environment via the NMS_ALLOWED_ORIGINS constant in wp-config.php
+    // (comma-separated, e.g. 'http://localhost:5180') or the nms_allowed_origins filter.
+    private const ALLOWED_ORIGINS = [
+        'https://trd-2-study.org',       // primary study website
+        'https://www.trd-2-study.org',
+        'https://mdd-study.nutriminds.net', // legacy subdomain; remove once it is taken offline
+    ];
+    // Optional details sent by external study sites, stored when present.
+    private const OPTIONAL_TEXT_FIELDS = ['country', 'city', 'preferred_language', 'contact_time'];
 
     private array $translations = [];
     private ?string $current_language = null;
@@ -41,11 +56,13 @@ final class NutriMinds_Survey {
         add_action('wp_enqueue_scripts', [$this, 'register_assets']);
         add_action('wp_ajax_' . self::AJAX_ACTION, [$this, 'handle_registration_submission']);
         add_action('wp_ajax_nopriv_' . self::AJAX_ACTION, [$this, 'handle_registration_submission']);
+        add_action('rest_api_init', [$this, 'register_rest_routes']);
         add_action('admin_menu', [$this, 'register_admin_menu']);
         add_action('admin_init', [$this, 'ensure_manage_capability_granted']);
         add_action('admin_init', [self::class, 'ensure_default_project_seeded']);
         add_action('admin_post_nms_export_registrations', [$this, 'handle_export_registrations']);
         add_action('admin_post_nms_save_privacy_policy', [$this, 'handle_save_privacy_policy']);
+        add_action('admin_post_nms_save_notifications', [$this, 'handle_save_notifications']);
         add_action('add_meta_boxes', [$this, 'register_project_meta_box']);
         add_action('save_post_' . self::POST_TYPE_PROJECT, [$this, 'save_project_meta_box'], 10, 2);
         add_filter('manage_' . self::POST_TYPE_REGISTRATION . '_posts_columns', [$this, 'filter_registration_columns']);
@@ -204,6 +221,15 @@ final class NutriMinds_Survey {
 
         add_submenu_page(
             'edit.php?post_type=' . self::POST_TYPE_REGISTRATION,
+            'Notifications',
+            'Notifications',
+            self::MANAGE_CAPABILITY,
+            'nms_notifications',
+            [$this, 'render_notifications_page']
+        );
+
+        add_submenu_page(
+            'edit.php?post_type=' . self::POST_TYPE_REGISTRATION,
             'Help',
             'Help',
             self::MANAGE_CAPABILITY,
@@ -268,6 +294,68 @@ final class NutriMinds_Survey {
         exit;
     }
 
+    /**
+     * Who is told about new registrations: the saved list, or the site admin email
+     * (Settings → General) until a list has been saved.
+     */
+    private function get_notification_recipients(): array {
+        $saved = (string) get_option(self::NOTIFICATION_RECIPIENTS_OPTION, '');
+        $emails = $saved !== '' ? array_map('trim', explode(',', $saved)) : [(string) get_option('admin_email')];
+
+        return array_values(array_filter($emails, 'is_email'));
+    }
+
+    public function render_notifications_page(): void {
+        if (!current_user_can(self::MANAGE_CAPABILITY)) {
+            return;
+        }
+
+        $saved = (string) get_option(self::NOTIFICATION_RECIPIENTS_OPTION, '');
+        ?>
+        <div class="wrap">
+            <h1>Registration Notifications</h1>
+            <?php if (isset($_GET['updated'])) : ?>
+                <div class="notice notice-success is-dismissible"><p>Notification recipients saved.</p></div>
+            <?php endif; ?>
+            <p>Every new registration sends a short notification email (English and German) to the addresses below, from <code><?php echo esc_html(self::MAIL_FROM); ?></code>. For privacy, the email names only the project and a reference number — the registrant's personal details stay in this dashboard.</p>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <input type="hidden" name="action" value="nms_save_notifications">
+                <?php wp_nonce_field('nms_notifications'); ?>
+                <table class="form-table" role="presentation">
+                    <tbody>
+                        <tr>
+                            <th scope="row"><label for="nms_notification_recipients">Send notifications to</label></th>
+                            <td>
+                                <input type="text" id="nms_notification_recipients" name="notification_recipients" class="large-text" value="<?php echo esc_attr($saved); ?>" placeholder="<?php echo esc_attr((string) get_option('admin_email')); ?>">
+                                <p class="description">One or more email addresses, separated by commas. Leave blank to use the site admin email (<code><?php echo esc_html((string) get_option('admin_email')); ?></code>).</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="submit"><button type="submit" class="button button-primary">Save</button></p>
+            </form>
+        </div>
+        <?php
+    }
+
+    public function handle_save_notifications(): void {
+        if (!current_user_can(self::MANAGE_CAPABILITY)) {
+            wp_die(esc_html__('You are not allowed to change this setting.', 'nutriminds-survey'), '', ['response' => 403]);
+        }
+
+        check_admin_referer('nms_notifications');
+
+        $raw = (string) wp_unslash($_POST['notification_recipients'] ?? '');
+        $emails = array_filter(array_map('sanitize_email', array_map('trim', explode(',', $raw))), 'is_email');
+        update_option(self::NOTIFICATION_RECIPIENTS_OPTION, implode(', ', array_unique($emails)), false);
+
+        wp_safe_redirect(add_query_arg([
+            'page' => 'nms_notifications',
+            'updated' => '1',
+        ], admin_url('admin.php')));
+        exit;
+    }
+
     public function render_help_page(): void {
         if (!current_user_can(self::MANAGE_CAPABILITY)) {
             return;
@@ -300,7 +388,13 @@ final class NutriMinds_Survey {
             <p>Go to <strong>NutriMinds Survey → All Registrations</strong> to view every submission. Use the <strong>Export all registrations (CSV)</strong> button at the top of that screen to download the full list.</p>
 
             <h2>Duplicate protection</h2>
-            <p>A person cannot register twice with the same email or phone number — a repeat submission is blocked with a message pointing them to <?php echo esc_html(self::ADMIN_CONTACT_EMAIL); ?>.</p>
+            <p>A person cannot register twice for the same project with the same email or phone number — a repeat submission is blocked with a message pointing them to <?php echo esc_html(self::ADMIN_CONTACT_EMAIL); ?>. The same person can register for different projects.</p>
+
+            <h2>Notifications</h2>
+            <p>Each new registration emails a short bilingual (English/German) notice to the addresses set under <strong>NutriMinds Survey → Notifications</strong> (default: the site admin email). It contains only the project name and a reference number, not personal details. All plugin emails are sent from <?php echo esc_html(self::MAIL_FROM); ?>.</p>
+
+            <h2>External study sites</h2>
+            <p>Study websites on other subdomains (currently <code><?php echo esc_html(implode(', ', self::ALLOWED_ORIGINS)); ?></code>) submit registrations to <code><?php echo esc_html(rest_url(self::REST_NAMESPACE . '/register')); ?></code>. Those registrations appear here like any other, with any extra details (country, city, preferred language, contact time, consents) included in the CSV export.</p>
 
             <h2>Languages</h2>
             <p>The form supports English and German. Visitors can switch language from the form itself; their choice is remembered for future visits.</p>
@@ -409,16 +503,20 @@ final class NutriMinds_Survey {
         return false;
     }
 
-    private function registration_exists_for(string $email, string $phone): bool {
+    private function registration_exists_for(string $email, string $phone, int $project_id): bool {
         $query = new WP_Query([
             'post_type' => self::POST_TYPE_REGISTRATION,
             'post_status' => 'publish',
             'posts_per_page' => 1,
             'fields' => 'ids',
             'meta_query' => [
-                'relation' => 'OR',
-                ['key' => self::META_PREFIX . 'email', 'value' => $email, 'compare' => '='],
-                ['key' => self::META_PREFIX . 'phone', 'value' => $phone, 'compare' => '='],
+                'relation' => 'AND',
+                ['key' => self::META_PREFIX . 'project_id', 'value' => $project_id, 'compare' => '=', 'type' => 'NUMERIC'],
+                [
+                    'relation' => 'OR',
+                    ['key' => self::META_PREFIX . 'email', 'value' => $email, 'compare' => '='],
+                    ['key' => self::META_PREFIX . 'phone', 'value' => $phone, 'compare' => '='],
+                ],
             ],
         ]);
 
@@ -606,8 +704,10 @@ final class NutriMinds_Survey {
         ]);
     }
 
-    private function posted_text(string $key): string {
-        return sanitize_text_field((string) wp_unslash($_POST[$key] ?? ''));
+    private function input_text(array $input, string $key): string {
+        $value = $input[$key] ?? '';
+
+        return is_scalar($value) ? sanitize_text_field((string) $value) : '';
     }
 
     private function is_valid_phone(string $phone): bool {
@@ -654,56 +754,122 @@ final class NutriMinds_Survey {
     }
 
     public function handle_registration_submission(): void {
-        $language = isset($_POST['language']) ? sanitize_key((string) wp_unslash($_POST['language'])) : '';
-        if ($this->is_supported_language($language)) {
-            $this->current_language = $language;
-        }
+        $input = wp_unslash($_POST);
+        $this->apply_submitted_language($input);
 
         if (!check_ajax_referer(self::NONCE_ACTION, 'nonce', false)) {
             wp_send_json_error(['message' => $this->t('ajax.invalidRequest')], 403);
         }
 
-        if ($this->is_submission_rate_limited()) {
-            wp_send_json_error(['message' => $this->t('ajax.rateLimited')], 429);
+        $result = $this->process_registration($input);
+
+        if ($result['success']) {
+            wp_send_json_success(['message' => $result['message']], $result['status']);
         }
 
-        if ($this->posted_text('website') !== '') {
+        wp_send_json_error(['message' => $result['message']], $result['status']);
+    }
+
+    public function register_rest_routes(): void {
+        register_rest_route(self::REST_NAMESPACE, '/register', [
+            'methods' => 'POST',
+            'callback' => [$this, 'handle_rest_registration'],
+            'permission_callback' => [$this, 'check_rest_origin'],
+        ]);
+    }
+
+    /**
+     * The REST endpoint has no nonce (the calling site is a different origin and
+     * can't obtain one), so it is limited to known study sites instead. Browsers
+     * always send Origin on cross-origin POSTs; everything else — rate limit,
+     * honeypot, full server-side validation — is shared with the AJAX form.
+     */
+    public function check_rest_origin(WP_REST_Request $request): bool|WP_Error {
+        $origin = (string) get_http_origin();
+
+        if ($origin !== '' && in_array($origin, $this->get_allowed_origins(), true)) {
+            return true;
+        }
+
+        return new WP_Error('nms_forbidden_origin', $this->t('ajax.invalidRequest'), ['status' => 403]);
+    }
+
+    private function get_allowed_origins(): array {
+        $origins = self::ALLOWED_ORIGINS;
+
+        if (defined('NMS_ALLOWED_ORIGINS')) {
+            $origins = array_merge($origins, array_map('trim', explode(',', (string) NMS_ALLOWED_ORIGINS)));
+        }
+
+        return array_values(array_filter((array) apply_filters('nms_allowed_origins', $origins)));
+    }
+
+    public function handle_rest_registration(WP_REST_Request $request): WP_REST_Response {
+        $input = $request->get_json_params() ?: $request->get_body_params();
+        $input = is_array($input) ? $input : [];
+        $this->apply_submitted_language($input);
+
+        $result = $this->process_registration($input);
+
+        return new WP_REST_Response(['success' => $result['success'], 'message' => $result['message']], $result['status']);
+    }
+
+    private function apply_submitted_language(array $input): void {
+        $language = sanitize_key($this->input_text($input, 'language'));
+        if ($this->is_supported_language($language)) {
+            $this->current_language = $language;
+        }
+    }
+
+    /**
+     * Validates and stores one registration. $input must already be unslashed.
+     *
+     * @return array{success: bool, status: int, message: string}
+     */
+    private function process_registration(array $input): array {
+        $fail = fn(string $message, int $status): array => ['success' => false, 'status' => $status, 'message' => $message];
+
+        if ($this->is_submission_rate_limited()) {
+            return $fail($this->t('ajax.rateLimited'), 429);
+        }
+
+        if ($this->input_text($input, 'website') !== '') {
             // Honeypot: real registrants never see or fill this field. Pretend success
             // without storing anything, so automated fillers don't learn to avoid it.
-            wp_send_json_success(['message' => $this->t('ajax.success')]);
+            return ['success' => true, 'status' => 200, 'message' => $this->t('ajax.success')];
         }
 
-        $first_name = $this->posted_text('first_name');
-        $last_name = $this->posted_text('last_name');
-        $birthday = $this->posted_text('birthday');
-        $gender = $this->posted_text('gender');
-        $phone = $this->posted_text('phone');
-        $email = sanitize_email((string) wp_unslash($_POST['email'] ?? ''));
-        $project_id = isset($_POST['project_id']) ? absint($_POST['project_id']) : 0;
-        $consent = !empty($_POST['consent']);
+        $first_name = $this->input_text($input, 'first_name');
+        $last_name = $this->input_text($input, 'last_name');
+        $birthday = $this->input_text($input, 'birthday');
+        $gender = $this->input_text($input, 'gender');
+        $phone = $this->input_text($input, 'phone');
+        $email = sanitize_email($this->input_text($input, 'email'));
+        $project_id = absint($input['project_id'] ?? 0);
+        $consent = !empty($input['consent']);
 
         if ($first_name === '' || $last_name === '' || $birthday === '' || $gender === '' || $phone === '' || !is_email($email) || !$project_id || !$consent) {
-            wp_send_json_error(['message' => $this->t('ajax.requiredFields')], 400);
+            return $fail($this->t('ajax.requiredFields'), 400);
         }
 
         if (!in_array($gender, self::GENDER_OPTIONS, true)) {
-            wp_send_json_error(['message' => $this->t('ajax.requiredFields')], 400);
+            return $fail($this->t('ajax.requiredFields'), 400);
         }
 
         if (!$this->is_valid_birthday($birthday)) {
-            wp_send_json_error(['message' => $this->t('ajax.birthdayError')], 400);
+            return $fail($this->t('ajax.birthdayError'), 400);
         }
 
         if (!$this->is_valid_phone($phone)) {
-            wp_send_json_error(['message' => $this->t('ajax.phoneError')], 400);
+            return $fail($this->t('ajax.phoneError'), 400);
         }
 
         if (get_post_type($project_id) !== self::POST_TYPE_PROJECT) {
-            wp_send_json_error(['message' => $this->t('ajax.projectInvalid')], 400);
+            return $fail($this->t('ajax.projectInvalid'), 400);
         }
 
-        if ($this->registration_exists_for($email, $phone)) {
-            wp_send_json_error(['message' => $this->get_already_registered_message()], 409);
+        if ($this->registration_exists_for($email, $phone, $project_id)) {
+            return $fail($this->get_already_registered_message(), 409);
         }
 
         $post_id = wp_insert_post([
@@ -714,7 +880,7 @@ final class NutriMinds_Survey {
         ], true);
 
         if (is_wp_error($post_id)) {
-            wp_send_json_error(['message' => $this->t('ajax.storageError')], 500);
+            return $fail($this->t('ajax.storageError'), 500);
         }
 
         update_post_meta((int) $post_id, self::META_PREFIX . 'first_name', $first_name);
@@ -724,13 +890,33 @@ final class NutriMinds_Survey {
         update_post_meta((int) $post_id, self::META_PREFIX . 'phone', $phone);
         update_post_meta((int) $post_id, self::META_PREFIX . 'email', $email);
         update_post_meta((int) $post_id, self::META_PREFIX . 'project_id', $project_id);
-        update_post_meta((int) $post_id, self::META_PREFIX . 'language', $language ?: $this->get_current_language());
+        update_post_meta((int) $post_id, self::META_PREFIX . 'language', $this->get_current_language());
         update_post_meta((int) $post_id, self::META_PREFIX . 'consent_agreed', '1');
         update_post_meta((int) $post_id, self::META_PREFIX . 'submitted_at', current_time('mysql'));
 
-        $this->send_confirmation_email((int) $post_id);
+        foreach (self::OPTIONAL_TEXT_FIELDS as $field) {
+            $value = $this->input_text($input, $field);
+            if ($value !== '') {
+                update_post_meta((int) $post_id, self::META_PREFIX . $field, $value);
+            }
+        }
 
-        wp_send_json_success(['message' => $this->t('ajax.success')]);
+        // Study-specific consent statements, stored as the list of statement IDs agreed to.
+        $consents = is_array($input['consents'] ?? null) ? $input['consents'] : [];
+        $agreed = [];
+        foreach ($consents as $id => $value) {
+            if (!empty($value)) {
+                $agreed[] = sanitize_key((string) $id);
+            }
+        }
+        if ($agreed) {
+            update_post_meta((int) $post_id, self::META_PREFIX . 'consents', implode(',', $agreed));
+        }
+
+        $this->send_confirmation_email((int) $post_id);
+        $this->send_admin_notification((int) $post_id);
+
+        return ['success' => true, 'status' => 200, 'message' => $this->t('ajax.success')];
     }
 
     private function send_confirmation_email(int $post_id): void {
@@ -753,9 +939,65 @@ final class NutriMinds_Survey {
 
         $subject = strtr($this->t_for_language('email.confirmation.subject', $language), $replacements);
         $body = strtr($this->t_for_language('email.confirmation.body', $language), $replacements);
-        $headers = ['Content-Type: text/plain; charset=UTF-8'];
+        wp_mail($email, $subject, $body, $this->get_mail_headers());
+    }
 
-        wp_mail($email, $subject, $body, $headers);
+    private function get_mail_headers(): array {
+        return [
+            'Content-Type: text/plain; charset=UTF-8',
+            'From: ' . self::MAIL_FROM_NAME . ' <' . self::MAIL_FROM . '>',
+        ];
+    }
+
+    /**
+     * Tells the team a registration arrived. Deliberately carries no personal data
+     * (registrations for a depression study are health-related), only the project,
+     * a reference number and a link to the dashboard. Written in English and German.
+     */
+    private function send_admin_notification(int $post_id): void {
+        $recipients = $this->get_notification_recipients();
+        if (!$recipients) {
+            return;
+        }
+
+        $project_id = (int) get_post_meta($post_id, self::META_PREFIX . 'project_id', true);
+        $project = get_the_title($project_id) ?: self::DEFAULT_PROJECT_TITLE;
+        $total = (new WP_Query([
+            'post_type' => self::POST_TYPE_REGISTRATION,
+            'post_status' => 'publish',
+            'posts_per_page' => 1,
+            'fields' => 'ids',
+            'meta_query' => [
+                ['key' => self::META_PREFIX . 'project_id', 'value' => $project_id, 'compare' => '=', 'type' => 'NUMERIC'],
+            ],
+        ]))->found_posts;
+        $submitted_at = (string) get_post_meta($post_id, self::META_PREFIX . 'submitted_at', true);
+        $dashboard_url = admin_url('edit.php?post_type=' . self::POST_TYPE_REGISTRATION);
+
+        $subject = sprintf('New registration / Neue Registrierung: %s', $project);
+        $body = implode("\n", [
+            sprintf('A new registration was received for "%s".', $project),
+            '',
+            sprintf('Reference: #%d', $post_id),
+            sprintf('Received: %s', $submitted_at),
+            sprintf('Registrations for this project so far: %d', $total),
+            '',
+            'For privacy, personal details are not included in this email. View them in the dashboard:',
+            $dashboard_url,
+            '',
+            '----------------------------------------',
+            '',
+            sprintf('Für „%s“ ist eine neue Registrierung eingegangen.', $project),
+            '',
+            sprintf('Referenz: #%d', $post_id),
+            sprintf('Eingegangen: %s', $submitted_at),
+            sprintf('Bisherige Registrierungen für dieses Projekt: %d', $total),
+            '',
+            'Aus Datenschutzgründen enthält diese E-Mail keine persönlichen Daten. Sie finden sie im Dashboard:',
+            $dashboard_url,
+        ]);
+
+        wp_mail($recipients, $subject, $body, $this->get_mail_headers());
     }
 
     public function filter_registration_columns(array $columns): array {
@@ -872,7 +1114,7 @@ final class NutriMinds_Survey {
         header('Content-Disposition: attachment; filename="nutriminds-survey-registrations-' . gmdate('Y-m-d') . '.csv"');
 
         $output = fopen('php://output', 'w');
-        fputcsv($output, ['First name', 'Last name', 'Birthday', 'Gender', 'Phone', 'Email', 'Project', 'Language', 'Submitted at']);
+        fputcsv($output, ['First name', 'Last name', 'Birthday', 'Gender', 'Phone', 'Email', 'Project', 'Language', 'Submitted at', 'Country', 'City', 'Preferred language', 'Contact time', 'Consents']);
 
         foreach ($registrations as $registration) {
             $project_id = (int) get_post_meta($registration->ID, self::META_PREFIX . 'project_id', true);
@@ -886,6 +1128,11 @@ final class NutriMinds_Survey {
                 $project_id ? (get_the_title($project_id) ?: '(deleted project)') : '',
                 (string) get_post_meta($registration->ID, self::META_PREFIX . 'language', true),
                 (string) get_post_meta($registration->ID, self::META_PREFIX . 'submitted_at', true),
+                (string) get_post_meta($registration->ID, self::META_PREFIX . 'country', true),
+                (string) get_post_meta($registration->ID, self::META_PREFIX . 'city', true),
+                (string) get_post_meta($registration->ID, self::META_PREFIX . 'preferred_language', true),
+                (string) get_post_meta($registration->ID, self::META_PREFIX . 'contact_time', true),
+                (string) get_post_meta($registration->ID, self::META_PREFIX . 'consents', true),
             ]));
         }
 

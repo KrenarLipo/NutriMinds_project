@@ -32,7 +32,7 @@
   "ajax.projectInvalid": "Bitte wählen Sie ein gültiges Projekt aus der Liste.",
   "ajax.storageError": "Die Registrierung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
   "ajax.rateLimited": "Zu viele Übermittlungen von dieser Verbindung. Bitte versuchen Sie es später erneut.",
-  "ajax.alreadyRegistered": "Diese E-Mail-Adresse oder Telefonnummer ist bereits bei uns registriert. Wenn Sie aus unserem System entfernt werden möchten, schreiben Sie bitte an {admin_email}.",
+  "ajax.alreadyRegistered": "Diese E-Mail-Adresse oder Telefonnummer ist für dieses Projekt bereits registriert. Wenn Sie aus unserem System entfernt werden möchten, schreiben Sie bitte an {admin_email}.",
   "email.confirmation.subject": "Sie sind für {project} registriert",
   "email.confirmation.body": "Hallo {name},\n\nvielen Dank für Ihre Registrierung für {project} bei {site}. Wir haben Ihre Daten gespeichert und melden uns mit den nächsten Schritten.\n\nFalls Sie zu einem beliebigen Zeitpunkt aus unserem System entfernt werden möchten, schreiben Sie bitte an {admin_email}.\n\n{site}"
 }

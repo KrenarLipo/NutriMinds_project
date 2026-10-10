@@ -17,6 +17,7 @@ foreach (['nms_registration', 'nms_project'] as $post_type) {
 }
 
 delete_option('nms_default_project_seeded');
+delete_option('nms_notification_recipients');
 
 $administrator_role = get_role('administrator');
 if ($administrator_role) {
